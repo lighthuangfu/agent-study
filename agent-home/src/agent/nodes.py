@@ -4,12 +4,14 @@ import concurrent.futures
 # 引入同级模块
 from .tools import ALL_TOOLS
 from .model import _llm, model_with_tools 
-from langchain.agents import create_agent, AgentState # type: ignore
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from .states import MergeAgentState
+from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage
+
 
 
 # Node A: 天气专家
-def weather_agent_node(state: AgentState):
+def weather_agent_node(state: MergeAgentState):
     print(">>> [Weather Agent] 开始工作")
     def _run_weather():
         prompt = """
@@ -23,6 +25,7 @@ def weather_agent_node(state: AgentState):
             weather_executor = create_agent(_llm, ALL_TOOLS)
             # 执行子任务
             result = weather_executor.invoke({"messages": [HumanMessage(content=prompt)]})
+            print(f"    -> 正在获取天气信息的结果是：{result['messages'][-1].content[:60]}.")
             return result["messages"][-1].content
         except Exception as e:
             return f"天气查询出错: {str(e)}"
@@ -32,7 +35,7 @@ def weather_agent_node(state: AgentState):
             future = executor.submit(_run_weather)
             # 60秒没结果就强制跳过，防止卡死整个系统
             final_msg = future.result(timeout=60)
-            print("    <- [Weather] 获取成功")
+            print(f"    <- [Weather] 获取成功:{final_msg[:60]}...")
             return {"weather_report": final_msg}
 
     except concurrent.futures.TimeoutError:
@@ -43,7 +46,7 @@ def weather_agent_node(state: AgentState):
         return {"weather_report": "⚠️ 天气服务异常"}
 
 # Node B: RSS 专家
-def rss_agent_node(state: AgentState):
+def rss_agent_node(state: MergeAgentState):
     print(">>> [RSS Agent] 开始工作 (启动并发处理...)")
     rss_urls = [
         "https://sspai.com/feed",
@@ -52,14 +55,12 @@ def rss_agent_node(state: AgentState):
         "https://plink.anyfeeder.com/newscn/whxw",
         "https://plink.anyfeeder.com/wsj/cn"
     ]
-
     summaries = []
-
     # 定义一个单独的处理函数，用于单个 URL 的处理
     def process_single_url(url):
         # 注意：这里需要在线程内部重新创建 agent executor，或者确保它是线程安全的
         # 简单起见，我们在这里直接调用工具，或者复用 executor (如果 executor 是无状态的)
-        local_executor = create_agent(_llm, ALL_TOOLS)
+        
         prompt = f"""
         请读取 RSS 源 {url}。
         请列出前 10 篇文章，严格按照以下 Markdown 格式输出，不要包含其他废话：
@@ -73,10 +74,11 @@ def rss_agent_node(state: AgentState):
         注意：
         - 再次强调：请严格使用 Markdown 格式输出链接，格式为：[标题](URL)。注意：不要在方括号 [] 和圆括号 () 之间加空格。如果标题中包含方括号，请将其转义或替换为其他符号。
         """
+        local_executor = create_agent(_llm, ALL_TOOLS)
         try:
             print(f"    -> 正在抓取: {url}")
             res = local_executor.invoke({"messages": [HumanMessage(content=prompt)]})
-            print(f"    <- 完成: {url}")
+            print(f"    <- 完成: {url}, {res['messages'][-1].content[:60]}...")
             return res["messages"][-1].content
         except Exception as e:
             print(f"    X 失败: {url} | 错误: {e}")
@@ -90,10 +92,10 @@ def rss_agent_node(state: AgentState):
         # 等待所有任务完成
         for future in concurrent.futures.as_completed(future_to_url):
             summaries.append(future.result())
-    print(">>> [RSS Agent] 所有 RSS 任务处理完毕")
+    print(f">>> [RSS Agent] 所有 RSS 任务处理完毕: {summaries[:100]}")
     return {"rss_summaries": summaries}
 # Node C: 汇总报告
-def aggregator_node(state: AgentState):
+def aggregator_node(state: MergeAgentState):
     print("\n>>> [Aggregator] 正在汇总最终报告...") # 加个日志确保它跑了
     # 1. 安全获取数据，给默认值防止报错
     weather = state.get("weather_report", "❌ 天气服务暂不可用")

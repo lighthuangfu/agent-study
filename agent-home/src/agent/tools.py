@@ -10,8 +10,9 @@ import re
 # 如果将来有 Tavily Key，可以切回去，那个更精准
 search = DuckDuckGoSearchRun() 
 # 2. 定义 Web Fetch 工具
-@tool
+@tool(description="Fetch the content of a web page directly.")
 def web_fetch(url: str):
+    print(">>> [Web Fetch Tool] 正在抓取网页内容...")
     """
     Fetch the content of a web page directly.
     """
@@ -20,13 +21,14 @@ def web_fetch(url: str):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
         response = requests.get(url, headers=headers, timeout=10)
-        return response.text[:5000] # Limit content length
+        return response.text[:5000]  # 返回前5000字符
     except Exception as e:
         return f"Failed to fetch {url}: {e}"
 
 # 3. 原有的 Web Browser 工具
-@tool
+@tool(description="Browse and read the content of a web page.")
 def web_browser(url: str):
+    print(">>> [Web Browser Tool] 正在访问网页...")
     """
     访问并读取指定的 URL 网页内容。
     当用户想要了解某个网页、链接或文章的内容时，使用此工具。
@@ -41,8 +43,9 @@ def web_browser(url: str):
         return f"无法读取该网页，错误信息: {e}"
 
 # 4. 原有的 RSS Reader 工具
-@tool
+@tool(description="Read and summarize the latest content from an RSS feed URL.")
 def rss_reader(url: str):
+    print
     """
     读取 RSS 订阅源的最新内容。
     增强版：自动处理编码问题、模拟浏览器、处理重定向。
@@ -110,8 +113,9 @@ def rss_reader(url: str):
         return f"读取发生错误: {str(e)}"
 
 # 5. 原有的定位工具
-@tool
+@tool(description="Get the current city location based on IP address.")
 def get_current_location():
+    print(">>> [Location Tool] 正在获取当前城市信息...")
     """
     通过 IP 地址获取当前的城市名称。
     返回格式例如：Beijing, China 或 Shanghai
@@ -128,8 +132,9 @@ def get_current_location():
         return f"定位失败: {str(e)}"
 
 # 6. 原有的天气工具
-@tool
+@tool(description="Get the current weather information for a specified city.")
 def get_weather(city: str):
+    print
     """
     查询指定城市的天气情况。
     参数 city: 城市名称（如 Beijing, Shanghai）。

@@ -4,23 +4,17 @@ import uvicorn
 import logging
 import json
 import asyncio
-from fastapi import FastAPI, HTTPException, Request
+import urllib3
+import langchain
+from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from agent.graph import graph
-from agent.model import _llm
-import urllib3
-import time
-from langchain_core.messages import AIMessage
-
 os.environ["USER_AGENT"] = "MyAIUserAgent/1.0"
-import langchain
 langchain.debug = True
-
 # 屏蔽警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,8 +37,6 @@ class TriggerRequest(BaseModel):
 class TaskResponse(BaseModel):
     result: str
     details: str = ""
-class TaskRequest(BaseModel):
-    user_id: str
 
 async def event_generator(inputs):
     """
