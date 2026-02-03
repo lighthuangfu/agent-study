@@ -1,0 +1,319 @@
+
+/* === 1. 全局基础设定 === */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #eef2f6; 
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: #2c3e50;
+}
+
+.app-container, .full-height {
+  min-height: 100vh;
+}
+
+/* === 2. 顶部导航 === */
+.glass-header {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  display: flex;
+  justify-content: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-content {
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo-text {
+  font-weight: 800;
+  font-size: 18px;
+  color: #2c3e50;
+  margin-left: 8px;
+}
+
+/* === 3. 卡片容器 === */
+.content-wrapper {
+  max-width: 700px;
+  margin: 30px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.custom-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(255,255,255,0.5);
+  transition: transform 0.3s ease;
+  text-align: left; /* 确保卡片内容默认左对齐 */
+}
+
+.control-panel:hover {
+  transform: translateY(-2px);
+}
+
+.card-title h3 {
+  margin: 0 0 15px 0;
+  font-size: 1.25rem;
+  color: #1a202c;
+}
+
+.desc-text {
+  color: #718096;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+/* === 4. 按钮样式 === */
+.action-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.magic-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 50px;
+  padding: 16px 48px;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
+  transition: all 0.3s ease;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 300px;
+}
+
+.magic-button:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(118, 75, 162, 0.5);
+}
+
+.magic-button:disabled {
+  background: #a0aec0;
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.8;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 10px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* === 5. 结果面板基础 === */
+.result-panel {
+  min-height: 200px;
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.simple-footer {
+  text-align: center;
+  color: #a0aec0;
+  font-size: 0.85rem;
+  padding: 20px;
+}
+
+/* 
+   ================================================================
+   === 6. Markdown 内容渲染核心样式 (Merged & Optimized) === 
+   ================================================================
+*/
+
+/* 基础排版与重置 */
+.markdown-viewer, 
+.markdown-body {
+  word-break: break-word; /* 允许在单词内换行 */
+  overflow-wrap: break-word; 
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left !important; /* 核心：强制左对齐 */
+  color: #2d3748;
+  line-height: 1.8;
+  font-size: 15px;
+}
+
+/* 标题样式 */
+.markdown-body h1, 
+.markdown-body h2 {
+  color: #1a202c;
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  border-bottom: none;
+}
+
+.markdown-body h3 {
+  margin-top: 25px;
+  margin-bottom: 15px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee; /* 给来源标题加下划线 */
+  color: #2d3748;
+}
+
+/* 列表 (List) 样式修正 - 关键部分 */
+.markdown-body ol, 
+.markdown-body ul {
+  padding-left: 20px !important; /* 统一缩进 */
+  margin-left: 0 !important;
+  margin-bottom: 16px;
+}
+
+/* 列表项 */
+.markdown-body li {
+  margin-bottom: 8px;
+  display: list-item;
+  text-align: left; /* 每一项都左对齐 */
+  white-space: normal;
+}
+
+.markdown-body code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 嵌套列表 (通常是摘要部分) */
+.markdown-body li > ul {
+  margin-top: 6px !important;
+  margin-bottom: 12px !important;
+  padding-left: 0 !important; /* 不需要再次大幅缩进 */
+  list-style-type: none !important; /* 去掉圆点，更清爽 */
+}
+
+.markdown-body li > ul > li {
+  color: #666; /* 摘要颜色变淡 */
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+
+/* 链接样式 */
+.markdown-body a {
+  color: #409eff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+  word-break: break-all; /* 防止长链接撑破布局 */
+}
+
+.markdown-body a:hover {
+  color: #66b1ff;
+  text-decoration: underline;
+}
+
+/* 引用块样式 (如果 AI 返回 > 引用) */
+.markdown-body blockquote {
+  margin: 0;
+  padding: 0 1em;
+  color: #6a737d;
+  border-left: 0.25em solid #dfe2e5;
+  background-color: #f8f9fa;
+}
+/* === Terminal Log Window === */
+.terminal-window {
+  background: #1e1e1e;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  overflow: hidden;
+  margin-top: 20px;
+  border: 1px solid #333;
+  text-align: left; /* 强制日志左对齐 */
+}
+
+.terminal-header {
+  background: #2d2d2d;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #333;
+}
+
+.terminal-header .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  display: inline-block;
+}
+
+.dot.red { background: #ff5f56; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green { background: #27c93f; }
+
+.terminal-header .title {
+  color: #999;
+  font-size: 12px;
+  margin-left: 10px;
+  flex: 1;
+  text-align: center;
+}
+
+.terminal-body {
+  padding: 15px;
+  height: 150px; /* 固定高度，内容多了滚动 */
+  overflow-y: auto;
+  color: #d4d4d4;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.log-line {
+  margin-bottom: 4px;
+  display: flex;
+}
+
+.log-time {
+  color: #569cd6;
+  margin-right: 8px;
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.log-content {
+  color: #ce9178; /* 柔和的橙色 */
+}
+
+/* 光标闪烁动画 */
+.blink-cursor {
+  color: #27c93f;
+  font-weight: bold;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
