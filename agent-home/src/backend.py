@@ -6,10 +6,17 @@ import json
 import asyncio
 import urllib3
 import langchain
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
+
+# 在应用启动时加载 .env 文件中的环境变量
+# 这样所有模块都可以通过 os.getenv() 访问这些变量
+load_dotenv()
+
 from agent.graph import graph
 os.environ["USER_AGENT"] = "MyAIUserAgent/1.0"
 langchain.debug = True
@@ -29,9 +36,10 @@ app_server.add_middleware(
     allow_headers=["*"],
 )
 
-# 定义请求数据模型 (这里暂时为空，未来可以传 prompt)
+# 定义请求数据模型 (支持携带用户输入内容)
 class TriggerRequest(BaseModel):
     user_id: str = "default_user"
+    user_input: Optional[str] = None
 
 # 定义响应数据模型
 class TaskResponse(BaseModel):
@@ -48,13 +56,28 @@ async def event_generator(inputs):
         # 这样每当一个 Node 运行完，我们就能收到通知
         async for event in graph.astream(inputs):
             for node_name, state in event.items():
+                # 先处理特殊节点：意图理解，单独推送一条 intent 事件
+                if node_name == "intent_expert":
+                    intent_text = state.get("user_intent") or ""
+                    intent_route = state.get("intent_route") or "none"
+                    if intent_text:
+                        intent_data = json.dumps(
+                            {
+                                "type": "intent",
+                                "content": intent_text,
+                                "route": intent_route,
+                            },
+                            ensure_ascii=False,
+                        )
+                        yield f"data: {intent_data}\n\n"
+
                 # 1. 构造日志消息
                 log_message = ""
-                if node_name == "weather_node":
+                if node_name == "weather_expert":
                     log_message = "🌤️ 天气数据获取完毕..."
-                elif node_name == "rss_agent_node":
+                elif node_name == "rss_expert":
                     log_message = "📰 RSS 订阅源抓取完毕..."
-                elif node_name == "aggregator_node":
+                elif node_name == "aggregator":
                     log_message = "✍️ 正在生成最终简报..."
                 
                 # 2. 发送 SSE 格式的数据包 (步骤日志)
@@ -89,11 +112,14 @@ def health_check():
 
 @app_server.post("/run-task", response_model=TaskResponse)
 async def run_agent_task(request: TriggerRequest):
-    logger.info(f"收到请求: {request.user_id}")
+    logger.info(f"收到请求 user_id={request.user_id}, user_input={request.user_input}")
+    user_input = request.user_input or "开始执行任务"
     inputs = {
-        "messages": [("user", "开始执行任务")],
-        "weather": "",
-        "rss_data": []
+        "messages": [("user", user_input)],
+        "rss_data": [],
+        "weather_report": "",
+        "user_input": user_input,
+        "user_intent": ""
     }
     
     # 返回流式响应，这样前端就能一点点收到数据了

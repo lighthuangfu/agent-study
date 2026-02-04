@@ -1,8 +1,11 @@
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI # pyright: ignore[reportMissingImports]
-from .tools import ALL_TOOLS  # 导入刚才定义的工具
+from agent_tools.tools import ALL_TOOLS  # 导入刚才定义的工具
 
+# 加载环境变量（幂等操作，多次调用安全）
+# 如果 backend.py 已经调用过，这里不会重复加载
+# 但如果 model.py 被单独导入（如测试），这里确保环境变量已加载
 load_dotenv()
 
 # 初始化基础模型

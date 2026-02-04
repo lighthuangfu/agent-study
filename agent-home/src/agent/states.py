@@ -1,8 +1,6 @@
 import operator
-from typing import TypedDict, Annotated, List, Union
+from typing import TypedDict, Annotated, List
 from langchain_core.messages import BaseMessage
-
-# ... (保留你原有的 llm 和 tools 代码) ...
 
 # 1. 定义自定义 State
 class MergeAgentState(TypedDict):
@@ -15,3 +13,11 @@ class MergeAgentState(TypedDict):
     
     # 自定义字段：存放天气报告
     weather_report: str
+
+    # 自定义字段：原始用户输入
+    user_input: str
+
+    # 自定义字段：模型解析后的用户意图
+    user_intent: str
+
+    intent_route: str
