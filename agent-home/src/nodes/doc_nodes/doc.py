@@ -1,0 +1,112 @@
+import concurrent.futures
+import concurrent.futures
+import time
+from typing import Any
+
+from models.model import _llm
+from agent_tools.tools import ALL_TOOLS
+from agent_states.states import MergeAgentState
+from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage
+
+
+# Node D: 文档专家（单次调用 + 超时标记，真正的重试由 graph 中的 doc_retry 节点完成）
+def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
+    print(">>> [Doc Agent] 开始工作")
+    doc_logs: list[str] = []
+    doc_retry_count = int(state.get("doc_retry_count") or 0)
+    doc_status = "running"
+    doc_last_error = ""
+
+    def _run_doc() -> str:
+        """执行文档查询的核心逻辑（不包含重试，仅单次调用）。"""
+        user_intent = state.get("user_intent", "")
+        if not user_intent:
+            msg = "用户需求为空，无法进行文档查询"
+            doc_logs.append(msg)
+            return msg
+
+        prompt = f"""
+        你是高级分析师助手。需要根据用户需求来展示文档内容。用户需求是：{user_intent}
+        你可以用以下网址进行资料检索：
+        https://huggingface.co/datasets
+        https://www.kaggle.com/datasets
+        请直接输出文档内容，不要废话，按照用户需求展示文档内容。 
+        注意：
+         -最大字数不能超过1万
+         -必须包含具体数据和图表
+         -必须包含具体分析和结论
+         -必须包含具体建议和行动计划
+         -必须包含具体风险和机会
+         -必须包含具体机会和行动计划
+         -必须包含具体风险和机会
+        用中文显示。
+        请严格使用 Markdown 格式输出链接，格式为：[标题](URL)。注意：不要在方括号 [] 和圆括号 () 之间加空格。如果标题中包含方括号，请将其转义或替换为其他符号。
+        """
+        try:
+            doc_executor = create_agent(_llm, ALL_TOOLS)
+            doc_logs.append("已创建文档子 Agent，开始调用工具生成内容…")
+            result = doc_executor.invoke({"messages": [HumanMessage(content=prompt)]})
+            content = result["messages"][-1].content
+            preview = str(content)[:160]
+            log_msg = f"正在获取文档信息的结果预览：{preview}..."
+            print(f"    -> {log_msg}")
+            doc_logs.append(log_msg)
+            return content
+        except Exception as e:
+            err = f"文档查询出错: {str(e)}"
+            doc_logs.append(err)
+            raise Exception(err)
+
+    # 单次调用的超时（秒），真正的重试在 graph 中通过 doc_retry 节点完成
+    SINGLE_TIMEOUT = 180
+
+    start_time = time.time()
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(_run_doc)
+            # 等待最多 SINGLE_TIMEOUT 秒
+            final_msg = future.result(timeout=SINGLE_TIMEOUT)
+            elapsed = time.time() - start_time
+            preview = str(final_msg)[:120]
+            msg = f"文档节点本次调用成功（用时 {elapsed:.1f}秒）: {preview}..."
+            print(f"    <- [Doc] {msg}")
+            doc_logs.append(msg)
+            doc_status = "success"
+            doc_last_error = ""
+            return {
+                "doc": final_msg,
+                "doc_logs": doc_logs,
+                "doc_retry_count": doc_retry_count,
+                "doc_status": doc_status,
+                "doc_last_error": doc_last_error,
+            }
+
+    except concurrent.futures.TimeoutError:
+        elapsed = time.time() - start_time
+        msg = f"文档节点单次调用超时（超过 {SINGLE_TIMEOUT} 秒，总用时 {elapsed:.1f}秒）"
+        print(f"    X [Doc] {msg}")
+        doc_logs.append(f"⚠️ {msg}")
+        doc_status = "timeout"
+        doc_last_error = msg
+        return {
+            "doc": msg,
+            "doc_logs": doc_logs,
+            "doc_retry_count": doc_retry_count,
+            "doc_status": doc_status,
+            "doc_last_error": doc_last_error,
+        }
+    except Exception as e:
+        elapsed = time.time() - start_time
+        msg = f"文档节点调用异常: {e}（用时 {elapsed:.1f}秒）"
+        print(f"    X [Doc] {msg}")
+        doc_logs.append(f"⚠️ {msg}")
+        doc_status = "error"
+        doc_last_error = str(e)
+        return {
+            "doc": msg,
+            "doc_logs": doc_logs,
+            "doc_retry_count": doc_retry_count,
+            "doc_status": doc_status,
+            "doc_last_error": doc_last_error,
+        }

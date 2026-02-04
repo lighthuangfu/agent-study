@@ -20,4 +20,17 @@ class MergeAgentState(TypedDict):
     # 自定义字段：模型解析后的用户意图
     user_intent: str
 
+    # 自定义字段：路由决策
     intent_route: str
+
+    # 自定义字段：文档节点的重试与超时日志
+    doc_logs: List[str]
+
+    # 自定义字段：文档节点的重试次数
+    doc_retry_count: int
+
+    # 自定义字段：文档节点当前状态（running/success/timeout/error）
+    doc_status: str
+
+    # 自定义字段：文档节点最后一次错误信息
+    doc_last_error: str

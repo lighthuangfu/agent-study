@@ -2,7 +2,7 @@
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
-from basetools.dbtool import _get_qdrant_client, _simple_hash_embedding, _split_text_into_chunks
+from basetools.dbtool import _get_qdrant_client, _split_text_into_chunks, _embed_documents
 import feedparser
 import requests
 import re
@@ -15,7 +15,7 @@ search = DuckDuckGoSearchRun()
 # 2. 定义 Web Fetch 工具
 @tool(description="Fetch the content of a web page directly.")
 def web_fetch(url: str) -> str:
-    print(">>> [Web Fetch Tool] 正在抓取网页内容...")
+    print(f">>> [Web Fetch Tool] 正在抓取网页内容{url}...")
     """
     Fetch the content of a web page directly.
     """
@@ -31,7 +31,7 @@ def web_fetch(url: str) -> str:
 # 3. 原有的 Web Browser 工具
 @tool(description="Browse and read the content of a web page.")
 def web_browser(url: str) -> str:
-    print(">>> [Web Browser Tool] 正在访问网页...")
+    print(f">>> [Web Browser Tool] 正在访问网页P{url}...")
     """
     访问并读取指定的 URL 网页内容。
     当用户想要了解某个网页、链接或文章的内容时，使用此工具。
@@ -166,6 +166,11 @@ def save_vectors_to_qdrant(
     - 如果集合不存在，会自动根据首个向量的维度创建集合（使用 COSINE 距离）。
     - 写入完成后返回写入的向量条数。
     """
+    print(f">>> [Qdrant] 正在将向量写入集合{collection_name}...")
+    print(f">>> [Qdrant] 向量数量: {len(vectors)}")
+    print(f">>> [Qdrant] 向量维度: {len(vectors[0])}")
+    print(f">>> [Qdrant] 向量payloads: {payloads}")
+    print(f">>> [Qdrant] 向量ids: {ids}")      
     if not vectors:
         print(">>> [Qdrant] 未收到任何向量，已跳过写入。")
         return "未收到任何向量，已跳过写入。"
@@ -215,6 +220,7 @@ def save_vectors_to_qdrant(
     )
 )
 def index_web_page_to_qdrant(url: str, collection_name: str = "web_pages") -> str:
+    print(f">>> [Index Web] 开始抓取并索引网页{url}...")
     """
     流程：
     1. 使用 web_browser 抓取网页正文；
@@ -231,7 +237,8 @@ def index_web_page_to_qdrant(url: str, collection_name: str = "web_pages") -> st
     if not chunks:
         return "网页抓取成功，但未得到有效文本内容。"
 
-    vectors = [_simple_hash_embedding(chunk) for chunk in chunks]
+    # 使用批量向量化（更高效）
+    vectors = _embed_documents(chunks)
     payloads = [{"url": url, "text": chunk} for chunk in chunks]
 
     summary = save_vectors_to_qdrant(

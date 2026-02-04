@@ -51,11 +51,16 @@ async def event_generator(inputs):
     这是一个生成器，负责监听 LangGraph 的运行步骤，
     并把每一步的状态实时推送到前端。
     """
+    """
+    这是一个生成器，负责监听 LangGraph 的运行步骤，
+    并把每一步的状态实时推送到前端（SSE）。
+    """
     try:
         # 使用 astream (异步流) 代替 invoke
-        # 这样每当一个 Node 运行完，我们就能收到通知
         async for event in graph.astream(inputs):
             for node_name, state in event.items():
+                logger.info("asteam 异步流信息日志, node_name=%s, state_keys=%s", node_name, list(state.keys()))
+
                 # 先处理特殊节点：意图理解，单独推送一条 intent 事件
                 if node_name == "intent_expert":
                     intent_text = state.get("user_intent") or ""
@@ -71,39 +76,75 @@ async def event_generator(inputs):
                         )
                         yield f"data: {intent_data}\n\n"
 
-                # 1. 构造日志消息
+                # 1. 构造简单节点日志
                 log_message = ""
                 if node_name == "weather_expert":
                     log_message = "🌤️ 天气数据获取完毕..."
                 elif node_name == "rss_expert":
                     log_message = "📰 RSS 订阅源抓取完毕..."
+                elif node_name == "doc_expert":
+                    log_message = "📰 文档节点执行完毕，正在整理重试日志和结果..."
                 elif node_name == "aggregator":
                     log_message = "✍️ 正在生成最终简报..."
-                
-                # 2. 发送 SSE 格式的数据包 (步骤日志)
+
                 if log_message:
-                    data = json.dumps({
-                        "type": "log", 
-                        "message": log_message,
-                        "node": node_name
-                    }, ensure_ascii=False)
+                    data = json.dumps(
+                        {
+                            "type": "log",
+                            "message": log_message,
+                            "node": node_name,
+                        },
+                        ensure_ascii=False,
+                    )
                     yield f"data: {data}\n\n"
-                    # 稍微模拟一下思考停顿，让用户看清日志 (可选)
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.2)
+
+                # 2. 如果是 doc_expert，推送详细的重试状态和日志
+                if node_name == "doc_expert":
+                    # node_status 事件（用于显示重试次数/最终状态）
+                    status_payload = json.dumps(
+                        {
+                            "type": "node_status",
+                            "node": "doc_expert",
+                            "status": state.get("doc_status", ""),
+                            "retry_count": state.get("doc_retry_count", 0),
+                            "last_error": state.get("doc_last_error", ""),
+                        },
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {status_payload}\n\n"
+                    await asyncio.sleep(0.1)
+
+                    # 逐条把 doc_logs 作为 log 事件发给前端
+                    doc_logs = state.get("doc_logs") or []
+                    for log_line in doc_logs:
+                        line_payload = json.dumps(
+                            {
+                                "type": "log",
+                                "node": "doc_expert",
+                                "message": log_line,
+                            },
+                            ensure_ascii=False,
+                        )
+                        yield f"data: {line_payload}\n\n"
+                        await asyncio.sleep(0.05)
 
         # 3. 这里的 state 是最后一次循环的 state，包含了最终结果
         # 注意：aggregator_node 的输出包含 messages，最后一条通常是结果
         final_message = state["messages"][-1].content
         # 4. 发送最终结果
-        final_data = json.dumps({
-            "type": "result", 
-            "content": final_message
-        }, ensure_ascii=False)
-        yield f"data: {final_data}\n\n"
+        final_data = json.dumps(
+            {
+                "type": "result",
+                "content": final_message,
+            },
+            ensure_ascii=False,
+        )
+        yield f"result: {final_message}\n\n"
 
     except Exception as e:
         logger.error(f"Error during streaming: {e}")
-        error_data = json.dumps({"type": "error", "message": str(e)})
+        error_data = json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False)
         yield f"data: {error_data}\n\n"
 
 @app_server.get("/")
@@ -117,6 +158,7 @@ async def run_agent_task(request: TriggerRequest):
     inputs = {
         "messages": [("user", user_input)],
         "rss_data": [],
+        "doc": "",
         "weather_report": "",
         "user_input": user_input,
         "user_intent": ""
