@@ -78,7 +78,9 @@ export function useAgentControl() {
                       ? '天气简报'
                       : intentRoute.value === 'rss'
                         ? 'RSS 热点订阅'
-                        : '当前输入不属于天气或新闻，将直接给出说明'
+                        : intentRoute.value === 'doc'
+                          ? '用户需求的内容分析（用户需求与天气和新闻都无关时）'
+                          : '都不是，我暂时不做操作'
                   }`
                 )
               } else if (data.type === 'result') {
