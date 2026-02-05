@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import concurrent.futures
 from typing import Any
 from models.model import _llm
@@ -9,7 +10,7 @@ from langchain_core.messages import HumanMessage
 # Node A: 天气专家
 def weather_agent_node(state: MergeAgentState) -> dict[str, Any]:
     print(">>> [Weather Agent] 开始工作")
-    def _run_weather():
+    def _run_we ather():
         prompt = """
         你是天气助手。需要根据定位来展示实时气温和24小时预报。
         如果发现是国内IP，则无需修改查询城市，如果发现IP是不在中国大陆，则强制修正为北京。

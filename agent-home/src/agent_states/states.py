@@ -1,5 +1,5 @@
 import operator
-from typing import TypedDict, Annotated, List
+from typing import TypedDict, Annotated, List, Dict
 from langchain_core.messages import BaseMessage
 
 # 1. 定义自定义 State
@@ -20,8 +20,13 @@ class MergeAgentState(TypedDict):
     # 自定义字段：模型解析后的用户意图
     user_intent: str
 
+    
+
     # 自定义字段：路由决策
     intent_route: str
+
+    # 自定义字段：任务规划
+    task_plan: Dict[str, List[str]]
 
     # 自定义字段：文档节点的重试与超时日志
     doc_logs: List[str]

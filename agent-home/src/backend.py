@@ -60,7 +60,6 @@ async def event_generator(inputs):
         async for event in graph.astream(inputs):
             for node_name, state in event.items():
                 logger.info("asteam 异步流信息日志, node_name=%s, state_keys=%s", node_name, list(state.keys()))
-
                 # 先处理特殊节点：意图理解，单独推送一条 intent 事件
                 if node_name == "intent_expert":
                     intent_text = state.get("user_intent") or ""
@@ -84,11 +83,11 @@ async def event_generator(inputs):
                     log_message = "📰 RSS 订阅源抓取完毕..."
                 elif node_name == "doc_expert":
                     log_message = "📰 文档节点执行完毕，正在整理重试日志和结果..."
-                elif node_name == "title_extract":
-                    log_message = "📌 文章标题提取完毕..."
+                elif node_name == "task_plan":
+                    task_plan = state.get("task_plan") or []
+                    log_message += f"📌 任务规划完毕，我将按照规划执行任务... \n\n{task_plan}\n\n"
                 elif node_name == "aggregator":
                     log_message = "✍️ 正在生成最终简报..."
-
                 if log_message:
                     data = json.dumps(
                         {
@@ -161,10 +160,10 @@ async def run_agent_task(request: TriggerRequest):
         "messages": [("user", user_input)],
         "rss_data": [],
         "doc": "",
-        "doc_title": "",
         "weather_report": "",
         "user_input": user_input,
-        "user_intent": ""
+        "user_intent": "",
+        "task_plan": []
     }
     
     # 返回流式响应，这样前端就能一点点收到数据了

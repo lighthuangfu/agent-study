@@ -7,6 +7,7 @@ from nodes.rss import rss_agent_node
 from nodes.doc_nodes.doc import doc_agent_node
 from nodes.doc_nodes.retry import doc_retry_node
 from nodes.mergenode import aggregator_node
+from nodes.taskplan import task_plan_node
 
 # --- 3. 构建图 (Intent Routing Graph) ---
 workflow = StateGraph(MergeAgentState)
@@ -18,6 +19,7 @@ workflow.add_node("rss_expert", rss_agent_node)
 workflow.add_node("doc_expert", doc_agent_node)
 workflow.add_node("doc_retry", doc_retry_node)
 workflow.add_node("aggregator", aggregator_node)
+workflow.add_node("task_plan", task_plan_node)
 
 def route_from_intent(state: MergeAgentState) -> str:
     """根据意图节点的输出决定后续流向。"""
@@ -49,13 +51,13 @@ def route_from_doc_retry(state: MergeAgentState) -> str:
 
 # 起点：先做意图理解
 workflow.add_edge(START, "intent_expert")
-
+workflow.add_edge("intent_expert", "task_plan")
 # 根据路由结果选择下一步：
 # - weather -> 只跑天气节点
 # - rss     -> 只跑 RSS 节点
 # - doc     -> 直接进入文档节点，由文档节点给出文档内容
 workflow.add_conditional_edges(
-    "intent_expert",
+    "task_plan",
     route_from_intent,
     {
         "weather": "weather_expert",
