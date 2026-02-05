@@ -84,6 +84,8 @@ async def event_generator(inputs):
                     log_message = "📰 RSS 订阅源抓取完毕..."
                 elif node_name == "doc_expert":
                     log_message = "📰 文档节点执行完毕，正在整理重试日志和结果..."
+                elif node_name == "title_extract":
+                    log_message = "📌 文章标题提取完毕..."
                 elif node_name == "aggregator":
                     log_message = "✍️ 正在生成最终简报..."
 
@@ -140,7 +142,7 @@ async def event_generator(inputs):
             },
             ensure_ascii=False,
         )
-        yield f"result: {final_message}\n\n"
+        yield f"data: {final_data}\n\n"
 
     except Exception as e:
         logger.error(f"Error during streaming: {e}")
@@ -159,6 +161,7 @@ async def run_agent_task(request: TriggerRequest):
         "messages": [("user", user_input)],
         "rss_data": [],
         "doc": "",
+        "doc_title": "",
         "weather_report": "",
         "user_input": user_input,
         "user_intent": ""

@@ -9,11 +9,13 @@ def aggregator_node(state: MergeAgentState) -> dict[str, Any]:
     weather = state.get("weather_report", "❌ 天气服务暂不可用")
     rss_data = state.get("rss_summaries", [])
     doc = state.get("doc", "")
+    doc_title = state.get("doc_title", "")
     user_intent = state.get("user_intent", "")
     # 2. 调试打印，看看拿到了什么
     print(f"    - 天气数据长度: {len(str(weather))}")
     print(f"    - RSS数据条数: {len(rss_data)}")
     print(f"    - 用户意图: {user_intent}")
+    print(f"    - 文档标题: {doc_title}")
     # 3. 组装 Markdown
     final_text = ""
     if rss_data:
@@ -21,6 +23,6 @@ def aggregator_node(state: MergeAgentState) -> dict[str, Any]:
         for i, summary in enumerate(rss_data, 1):
             final_text += f"\n### 📌 来源 {i}\n{summary}\n"
     elif doc:
-        final_text += f"\n## 📰 用户需求的内容分析（用户需求与天气和新闻都无关时）\n{doc}\n"
+            final_text += f"\n## 📰 用户需求的内容分析\n{doc}\n"
     # 4. 关键：必须返回 messages，这样 invoke 结果里才有 content
     return {"messages": [AIMessage(content=final_text)]}

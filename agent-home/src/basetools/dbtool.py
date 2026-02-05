@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 import os
+from uuid import uuid4
+from datetime import datetime
+from typing import List, Dict
 from typing import List, Optional
 from qdrant_client import QdrantClient
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from qdrant_client import models as qmodels
 from langchain_core.embeddings import Embeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 
 # 尝试导入不同的 embedding 模型
 try:
@@ -199,3 +204,58 @@ def _embed_documents(texts: List[str]) -> List[List[float]]:
         return []
     embedding = _get_default_embedding()
     return embedding.embed_documents(texts)
+
+def index_generated_doc_to_qdrant(
+    text: str, 
+    user_intent: str,
+    collection_name: str = "generated_docs"
+    ) -> str:
+    """
+    将生成的文档索引到 Qdrant 向量数据库。
+    """
+    if not text or not text.strip or not user_intent:
+        return "用户意图或文档内容为空，无法进行索引。"
+
+    print(f">>> [Index Generated Doc] 开始索引文档{text[:100]}...")
+    print(f">>> [Index Generated Doc] 用户意图: {user_intent}")
+    print(f">>> [Index Generated Doc] 文档内容: {text[:100]}...")
+    print(f">>> [Index Generated Doc] 集合名称: {collection_name}")
+     # 1. 切片
+    chunks = _split_text_into_chunks(text, max_len=500)
+    if not chunks:
+        print(f">>> [Index Generated Doc] 文档切片结果为空，跳过向量入库。")
+        return "文档切片结果为空，跳过向量入库。"
+    vectors = _embed_documents(chunks)
+    doc_id = str(uuid4())
+    now = datetime.utcnow().isoformat() + "Z"
+    payloads: List[Dict] = []
+    for idx, chunk in enumerate(chunks):
+        payloads.append(
+            {
+                "doc_id": doc_id,
+                "chunk_id": idx,
+                "user_intent": user_intent,
+                "source": "generated_doc",
+                "created_at": now,
+                "text": chunk,
+            }
+        )
+     # 4. 写入 Qdrant（可以复用现有 save_vectors_to_qdrant，或直接用 client）
+    client = _get_qdrant_client()
+    dim = len(vectors[0])
+
+    try:
+        client.get_collection(collection_name)
+    except Exception:
+        client.recreate_collection(
+            collection_name,
+            vectors_config=qmodels.VectorParams(size=dim, distance=qmodels.Distance.COSINE),
+        )
+
+    ids = [str(uuid4()) for _ in vectors]
+    points = [
+        qmodels.PointStruct(id=pid, vector=vec, payload=pl)
+        for pid, vec, pl in zip(ids, vectors, payloads)
+    ]
+    client.upsert(collection_name=collection_name, points=points)
+    return f"已将文档 {doc_id} 的 {len(points)} 个片段写入集合 `{collection_name}`。"

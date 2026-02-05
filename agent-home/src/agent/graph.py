@@ -68,7 +68,7 @@ workflow.add_conditional_edges(
 workflow.add_edge("weather_expert", "aggregator")
 workflow.add_edge("rss_expert", "aggregator")
 
-# 文档节点：先跑 doc_expert，再根据状态走重试或汇总
+# 文档节点：成功则先提取标题再汇总，超时则走重试
 workflow.add_conditional_edges(
     "doc_expert",
     route_from_doc,
@@ -77,8 +77,9 @@ workflow.add_conditional_edges(
         "done": "aggregator",
     },
 )
+# 标题提取节点完成后进入汇总
 
-# 重试节点：根据重试后的状态，决定再次调用 doc_expert 还是结束到汇总
+# 重试节点：根据重试后的状态，决定再次调用 doc_expert 还是结束到汇总（失败时直接汇总，无标题）
 workflow.add_conditional_edges(
     "doc_retry",
     route_from_doc_retry,
@@ -87,7 +88,6 @@ workflow.add_conditional_edges(
         "done": "aggregator",
     },
 )
-
 workflow.add_edge("aggregator", END)
 
 # 编译

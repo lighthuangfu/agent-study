@@ -34,3 +34,5 @@ class MergeAgentState(TypedDict):
 
     # 自定义字段：文档节点最后一次错误信息
     doc_last_error: str
+
+    doc: str
