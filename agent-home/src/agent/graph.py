@@ -1,6 +1,5 @@
 # src/agent/graph.py
 from langgraph.graph import StateGraph, END, START
-from langgraph.checkpoint.memory import MemorySaver
 from agent_states.states import MergeAgentState
 from nodes.userintent import intent_agent_node
 from nodes.weather import weather_agent_node
@@ -10,18 +9,10 @@ from nodes.doc_nodes.retry import doc_retry_node
 from nodes.mergenode import aggregator_node
 from nodes.taskplan import task_plan_node
 from nodes.chatnodes import chat_node
-# --- 3. 构建图 (Intent Routing Graph) ---
-workflow = StateGraph(MergeAgentState)
 
-# 添加节点
-workflow.add_node("intent_expert", intent_agent_node)
-workflow.add_node("weather_expert", weather_agent_node)
-workflow.add_node("rss_expert", rss_agent_node)
-workflow.add_node("doc_expert", doc_agent_node)
-workflow.add_node("doc_retry", doc_retry_node)
-workflow.add_node("aggregator", aggregator_node)
-workflow.add_node("task_plan", task_plan_node)
-workflow.add_node("chat", chat_node)
+
+
+
 def route_from_intent(state: MergeAgentState) -> str:
     """根据意图节点的输出决定后续流向。"""
     route = (state.get("intent_route")).lower()
@@ -57,6 +48,44 @@ def route_from_chat(state: MergeAgentState) -> str:
         return route
     return "none"
 
+
+#doc子图
+doc_graph = StateGraph(MergeAgentState)
+doc_graph.add_node("doc_expert", doc_agent_node)
+doc_graph.add_node("doc_retry", doc_retry_node)
+doc_graph.add_edge(START, "doc_expert")
+# 文档节点：成功则结束子图，超时则走重试（子图内只能连到子图节点或 END，不能连主图的 aggregator）
+doc_graph.add_conditional_edges(
+    "doc_expert",
+    route_from_doc,
+    {
+        "retry": "doc_retry",
+        "done": END,
+    },
+)
+# 重试节点：根据重试后的状态，决定再次调用 doc_expert 还是结束子图
+doc_graph.add_conditional_edges(
+    "doc_retry",
+    route_from_doc_retry,
+    {
+        "retry": "doc_expert",
+        "done": END,
+    },
+)
+doc_graph = doc_graph.compile()
+
+# --- 3. 构建图 (Intent Routing Graph) ---
+workflow = StateGraph(MergeAgentState)
+
+# 添加节点
+workflow.add_node("intent_expert", intent_agent_node)
+workflow.add_node("weather_expert", weather_agent_node)
+workflow.add_node("rss_expert", rss_agent_node)
+workflow.add_node("aggregator", aggregator_node)
+workflow.add_node("task_plan", task_plan_node)
+workflow.add_node("chat", chat_node)
+workflow.add_node("doc_graph", doc_graph)
+
 # 起点：先做意图理解
 workflow.add_edge(START, "chat")
 workflow.add_conditional_edges(
@@ -77,38 +106,15 @@ workflow.add_conditional_edges(
     {
         "weather": "weather_expert",
         "rss": "rss_expert",
-        "doc": "doc_expert",
+        "doc": "doc_graph",
     },
 )
 
-# 天气 / RSS 的结果最终都汇总到 aggregator
+# 天气 / RSS / 文档子图 的结果最终都汇总到 aggregator
 workflow.add_edge("weather_expert", "aggregator")
 workflow.add_edge("rss_expert", "aggregator")
-
-# 文档节点：成功则先提取标题再汇总，超时则走重试
-workflow.add_conditional_edges(
-    "doc_expert",
-    route_from_doc,
-    {
-        "retry": "doc_retry",
-        "done": "aggregator",
-    },
-)
-# 标题提取节点完成后进入汇总
-
-# 重试节点：根据重试后的状态，决定再次调用 doc_expert 还是结束到汇总（失败时直接汇总，无标题）
-workflow.add_conditional_edges(
-    "doc_retry",
-    route_from_doc_retry,
-    {
-        "retry": "doc_expert",
-        "done": "aggregator",
-    },
-)
+workflow.add_edge("doc_graph", "aggregator")  # 子图结束后由主图接到 aggregator
 workflow.add_edge("aggregator", END)
-
-# 本地进程内的记忆（重启进程会丢，但足够做多轮对话）
-checkpointer = MemorySaver()
 
 # 编译
 graph = workflow.compile()

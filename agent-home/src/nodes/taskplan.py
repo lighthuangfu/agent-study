@@ -25,6 +25,7 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
     lines = [line for line in full_text.splitlines() if line.strip()]
     task_plan = lines[-1].strip()
     print(f"    <- [Task Plan] 任务规划完毕，正在执行任务... \n\n{task_plan}")
+    # 用 intent_route 驱动图的路由；不覆盖 user_intent，保留 intent_expert 的意图描述给 doc 等节点用
     if task_plan == "ROUTE=weather":
         return {"task_plan": {
             "我将进行天气查询计划\n\n",
@@ -33,7 +34,7 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
             "3.汇总天气信息\n\n",
             "4.展示天气简报\n\n",
         },
-        "user_intent": "weather",
+        "intent_route": "weather",
         }
     elif task_plan == "ROUTE=rss":
         return {"task_plan": {
@@ -43,7 +44,7 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
             "3.汇总RSS订阅源信息\n\n",
             "4.展示RSS订阅源简报\n\n",
             },
-            "user_intent": "rss",
+            "intent_route": "rss",
         }
     elif task_plan == "ROUTE=doc":
         return {"task_plan": {
@@ -53,6 +54,6 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
             "3.汇总文档信息\n\n",
             "4.展示文档详情\n\n",
         },
-        "user_intent": "doc",
+        "intent_route": "doc",
         }
-    return {"task_plan": task_plan, "user_intent": "doc"}
+    return {"task_plan": task_plan, "intent_route": "doc"}

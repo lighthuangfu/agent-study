@@ -1,11 +1,12 @@
 import re
+import os
 import time
 import threading
 import logging
 from typing import Any
 import concurrent.futures
 import concurrent.futures
-from models.model import _llm
+from models.model import _llm, api_key
 from agent_tools.tools import ALL_TOOLS
 from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage
@@ -14,6 +15,8 @@ from basetools.dbtool import index_generated_doc_to_qdrant
 
 logger = logging.getLogger(__name__)
 
+base_url = os.environ.get("DOUBAO_BASE_URL")
+api_key = os.environ.get("DOUBAO_API_KEY")
 
 # Node D: 文档专家（单次调用 + 超时标记，真正的重试由 graph 中的 doc_retry 节点完成）
 def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
@@ -36,6 +39,7 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         你可以用以下网址进行资料检索：
         https://huggingface.co/datasets
         https://www.kaggle.com/datasets
+        {base_url}?api_key={api_key}
         请直接输出文档内容，按照用户需求展示文档内容。 
         注意：
         - 必须包含具体数据和图表
@@ -48,6 +52,7 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         请严格使用 Markdown 格式输出链接，格式为：[标题](URL)。注意：不要在方括号 [] 和圆括号 () 之间加空格。如果标题中包含方括号，请将其转义或替换为其他符号。
         """
         try:
+            logger.info(f"    -> 正在创建文档子 Agent，开始调用工具生成内容…\n\n{prompt}")
             doc_executor = create_agent(_llm, ALL_TOOLS)
             doc_logs.append("已创建文档子 Agent，开始调用工具生成内容…")
             result = doc_executor.invoke({"messages": [HumanMessage(content=prompt)]})
@@ -86,7 +91,7 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
             doc_logs.append(msg)
             doc_status = "success"
             doc_last_error = ""
-            return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
+            return _doc_result(final_msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
     except concurrent.futures.TimeoutError:
         elapsed = time.time() - start_time
         if future.done():
@@ -104,14 +109,14 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
             doc_logs.append(msg)
             doc_status = "success"
             doc_last_error = ""
-            return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
+            return _doc_result(future.result(), doc_logs, doc_retry_count, doc_status, doc_last_error)
         else:
             msg = f"文档节点单次调用超时（超过 {SINGLE_TIMEOUT} 秒，总用时 {elapsed:.1f}秒）"
             logger.error(f"    X [Doc] {msg}")
             doc_logs.append(f"⚠️ {msg}")
             doc_status = "timeout"
             doc_last_error = msg
-            return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
+            return _doc_result(future.result(), doc_logs, doc_retry_count, doc_status, doc_last_error)
     except Exception as e:
         elapsed = time.time() - start_time
         msg = f"文档节点调用异常: {e}（用时 {elapsed:.1f}秒）"
@@ -119,7 +124,7 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         doc_logs.append(f"⚠️ {msg}")
         doc_status = "error"
         doc_last_error = str(e)
-        return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
+        return _doc_result(future.result(), doc_logs, doc_retry_count, doc_status, doc_last_error)
 def _extract_title_from_markdown(doc: str) -> str | None:
     """从 Markdown 中提取第一个一级或二级标题。"""
     if not doc or not doc.strip():

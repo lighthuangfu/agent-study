@@ -48,12 +48,19 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
 
         intent_text = "\n".join(lines).strip() or "未能解析出清晰的用户意图。"
 
+        # 至少用意图总结作为 user_intent，供 doc 等节点使用；若有上次用户消息则追加（支持 HumanMessage 或 ('user', content) 元组）
         history = state.get("messages", [])
-        user_intent_value = ""
+        user_intent_value = intent_text
         if history:
             last_human = next((m for m in reversed(history) if isinstance(m, HumanMessage)), None)
             if isinstance(last_human, HumanMessage):
                 user_intent_value = intent_text + "\n\n上一次用户消息：" + last_human.content
+            else:
+                # 兼容 tuple 形式，如 ('user', content)
+                for m in reversed(history):
+                    if isinstance(m, (list, tuple)) and len(m) >= 2 and (m[0] == "user" or str(m[0]).lower() == "human"):
+                        user_intent_value = intent_text + "\n\n用户消息：" + str(m[1])
+                        break
                 
         # 基于关键字进行一次“纠错式”路由判断，避免模型选错
         text_for_rule = (raw_input + "\n" + intent_text).lower()
