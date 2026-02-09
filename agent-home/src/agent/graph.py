@@ -8,9 +8,7 @@ from nodes.doc_nodes.doc import doc_agent_node
 from nodes.doc_nodes.retry import doc_retry_node
 from nodes.mergenode import aggregator_node
 from nodes.taskplan import task_plan_node
-from nodes.chatnodes import chat_node
-
-
+from nodes.chatnodes import chat_node, logger
 
 
 def route_from_intent(state: MergeAgentState) -> str:

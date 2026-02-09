@@ -1,16 +1,15 @@
 import re
 import os
 import time
-import threading
 import logging
+import threading
+import concurrent.futures
 from typing import Any
-import concurrent.futures
-import concurrent.futures
 from models.model import _llm, api_key
 from agent_tools.tools import ALL_TOOLS
 from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage
 from agent_states.states import MergeAgentState
+from langchain_core.messages import HumanMessage
 from basetools.dbtool import index_generated_doc_to_qdrant
 
 logger = logging.getLogger(__name__)
@@ -48,7 +47,7 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         - 必须包含具体风险和机会
         - 必须包含具体机会和行动计划
         - 不要重复重复的信息
-        - 必须用中文显示。
+        - 必须用中文显示，这一点要强制执行，不要违反。
         请严格使用 Markdown 格式输出链接，格式为：[标题](URL)。注意：不要在方括号 [] 和圆括号 () 之间加空格。如果标题中包含方括号，请将其转义或替换为其他符号。
         """
         try:

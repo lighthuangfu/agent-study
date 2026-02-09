@@ -58,6 +58,7 @@ async def event_generator(inputs, thread_id: str = "default_thread"):
     try:
         # 使用 astream (异步流) 代替 invoke
         async for event in graph.astream(inputs, config={"configurable": {"thread_id": thread_id}}):
+            logger.info(f"    -> thread_id: {thread_id}")
             for node_name, state in event.items():
                 logger.info("asteam 异步流信息日志, node_name=%s, state_keys=%s", node_name, list(state.keys()))
                 # 先处理特殊节点：意图理解，单独推送一条 intent 事件
@@ -85,7 +86,20 @@ async def event_generator(inputs, thread_id: str = "default_thread"):
                     log_message = "📰 文档节点执行完毕，正在整理重试日志和结果..."
                 elif node_name == "task_plan":
                     task_plan = state.get("task_plan") or []
-                    log_message += f"📌 任务规划完毕，我将按照规划执行任务... \n\n{task_plan}\n\n"
+                    sorted_task_plan = sorted(task_plan)
+                    log_message += f"📌 任务规划完毕，我将按照规划执行任务... \n\n"
+                    for log_line in sorted_task_plan:
+                        log_message += f"{log_line}\n"
+                    if log_message:
+                        log_message = json.dumps(
+                            {
+                                "type": "log",
+                                "node": "task_plan",
+                                "message": log_message,
+                            },
+                            ensure_ascii=False,
+                        )
+                        yield f"data: {log_message}\n\n"
                 elif node_name == "aggregator":
                     log_message = "✍️ 正在生成最终简报..."
                 # 2. 如果是 doc_expert，推送详细的重试状态和日志
@@ -129,7 +143,6 @@ async def event_generator(inputs, thread_id: str = "default_thread"):
             ensure_ascii=False,
         )
         yield f"data: {final_data}\n\n"
-
     except Exception as e:
         logger.error(f"Error during streaming: {e}")
         error_data = json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False)
