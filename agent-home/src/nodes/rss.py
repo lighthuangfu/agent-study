@@ -6,21 +6,27 @@ from agent_states.states import MergeAgentState
 from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage
 
-# Node B: RSS 专家
-def rss_agent_node(state: MergeAgentState) -> dict[str, Any]:
-    print(">>> [RSS Agent] 开始工作 (启动并发处理...)")
-    rss_urls = [
+#数据源列表
+_rss_urls = [
         "https://sspai.com/feed",
         "http://www.ruanyifeng.com/blog/atom.xml",
         "https://plink.anyfeeder.com/weibo/search/hot",
         "https://plink.anyfeeder.com/newscn/whxw",
         "https://plink.anyfeeder.com/wsj/cn"
     ]
+# Node B: RSS 专家
+def rss_agent_node(state: MergeAgentState) -> dict[str, Any]:
+    print(">>> [RSS Agent] 开始工作 (启动并发处理...)")
     summaries = []
     # 定义一个单独的处理函数，用于单个 URL 的处理
     def process_single_url(url: str) -> str:
-        # 注意：这里需要在线程内部重新创建 agent executor，或者确保它是线程安全的
-        # 简单起见，我们在这里直接调用工具，或者复用 executor (如果 executor 是无状态的)
+        """
+        处理单个 RSS URL
+        :param url: RSS URL
+        :return: RSS 摘要
+        注意：这里需要在线程内部重新创建 agent executor，或者确保它是线程安全的
+        简单起见，我们在这里直接调用工具，或者复用 executor (如果 executor 是无状态的)
+        """
         
         prompt = f"""
         请读取 RSS 源 {url}。
@@ -49,7 +55,7 @@ def rss_agent_node(state: MergeAgentState) -> dict[str, Any]:
     # max_workers=5 表示同时开5个线程跑
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         # 将任务提交给线程池
-        future_to_url = {executor.submit(process_single_url, url): url for url in rss_urls}
+        future_to_url = {executor.submit(process_single_url, url): url for url in _rss_urls}
         # 等待所有任务完成
         for future in concurrent.futures.as_completed(future_to_url):
             summaries.append(future.result())

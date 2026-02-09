@@ -259,3 +259,54 @@ def index_generated_doc_to_qdrant(
     ]
     client.upsert(collection_name=collection_name, points=points)
     return f"已将文档 {doc_id} 的 {len(points)} 个片段写入集合 `{collection_name}`。"
+
+
+def query_by_doc_id(
+    doc_id: str,
+    collection_name: str = "generated_docs",
+    limit: int = 100,
+    with_vectors: bool = False,
+) -> List[Dict]:
+    """
+    按 doc_id 从 Qdrant 集合中查询该文档的所有片段（按 chunk_id 排序）。
+
+    参数:
+        doc_id: 文档 ID（写入时 payload 中的 doc_id）
+        collection_name: 集合名称，默认 "generated_docs"
+        limit: 最多返回条数，默认 100
+        with_vectors: 是否返回向量，默认 False
+
+    返回:
+        匹配的 point 列表，每项为 {"id": ..., "payload": {...}, "vector": ...(可选)}
+    """
+    client = _get_qdrant_client()
+    try:
+        client.get_collection(collection_name)
+    except Exception:
+        return []
+
+    query_filter = qmodels.Filter(
+        must=[
+            qmodels.FieldCondition(
+                key="doc_id",
+                match=qmodels.MatchValue(value=doc_id),
+            )
+        ]
+    )
+    results, _ = client.scroll(
+        collection_name=collection_name,
+        scroll_filter=query_filter,
+        limit=limit,
+        with_vectors=with_vectors,
+        with_payload=True,
+    )
+    # 按 chunk_id 排序，便于还原文档顺序
+    results.sort(key=lambda p: p.payload.get("chunk_id", 0))
+    return [
+        {
+            "id": p.id,
+            "payload": p.payload or {},
+            **({"vector": p.vector} if with_vectors and p.vector else {}),
+        }
+        for p in results
+    ]

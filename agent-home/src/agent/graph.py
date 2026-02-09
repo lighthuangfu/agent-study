@@ -1,5 +1,6 @@
 # src/agent/graph.py
 from langgraph.graph import StateGraph, END, START
+from langgraph.checkpoint.memory import MemorySaver
 from agent_states.states import MergeAgentState
 from nodes.userintent import intent_agent_node
 from nodes.weather import weather_agent_node
@@ -8,7 +9,7 @@ from nodes.doc_nodes.doc import doc_agent_node
 from nodes.doc_nodes.retry import doc_retry_node
 from nodes.mergenode import aggregator_node
 from nodes.taskplan import task_plan_node
-
+from nodes.chatnodes import chat_node
 # --- 3. 构建图 (Intent Routing Graph) ---
 workflow = StateGraph(MergeAgentState)
 
@@ -20,10 +21,10 @@ workflow.add_node("doc_expert", doc_agent_node)
 workflow.add_node("doc_retry", doc_retry_node)
 workflow.add_node("aggregator", aggregator_node)
 workflow.add_node("task_plan", task_plan_node)
-
+workflow.add_node("chat", chat_node)
 def route_from_intent(state: MergeAgentState) -> str:
     """根据意图节点的输出决定后续流向。"""
-    route = (state.get("intent_route") or "none").lower()
+    route = (state.get("intent_route")).lower()
     if route in ("weather", "rss", "doc"):
         return route
     return "doc"
@@ -48,9 +49,23 @@ def route_from_doc_retry(state: MergeAgentState) -> str:
     # 否则认为已经结束，进入汇总
     return "done"
 
+def route_from_chat(state: MergeAgentState) -> str:
+    """根据聊天节点的输出决定后续流向。"""
+    route = (state.get("chat_route") or "none").lower()
+    print(f"    <- [route_from_chat Route] 路由: {route}")
+    if route in ("none", "intent_expert"):
+        return route
+    return "none"
 
 # 起点：先做意图理解
-workflow.add_edge(START, "intent_expert")
+workflow.add_edge(START, "chat")
+workflow.add_conditional_edges(
+    "chat", 
+    route_from_chat, 
+    {
+        "intent_expert": "intent_expert",
+    }
+)
 workflow.add_edge("intent_expert", "task_plan")
 # 根据路由结果选择下一步：
 # - weather -> 只跑天气节点
@@ -92,5 +107,8 @@ workflow.add_conditional_edges(
 )
 workflow.add_edge("aggregator", END)
 
+# 本地进程内的记忆（重启进程会丢，但足够做多轮对话）
+checkpointer = MemorySaver()
+
 # 编译
-graph = workflow.compile()  
+graph = workflow.compile()

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Any
-from agent_states.states import MergeAgentState
 from models.model import _llm
+from agent_states.states import MergeAgentState
 
 def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
     print(">>> [Task Plan] 开始规划任务")
@@ -32,7 +32,8 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
             "2.查询天气\n\n",
             "3.汇总天气信息\n\n",
             "4.展示天气简报\n\n",
-        }
+        },
+        "user_intent": "weather",
         }
     elif task_plan == "ROUTE=rss":
         return {"task_plan": {
@@ -41,7 +42,9 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
             "2.抓取RSS订阅源\n\n",
             "3.汇总RSS订阅源信息\n\n",
             "4.展示RSS订阅源简报\n\n",
-        }}
+            },
+            "user_intent": "rss",
+        }
     elif task_plan == "ROUTE=doc":
         return {"task_plan": {
             "我将进行文档查询计划\n\n",
@@ -49,5 +52,7 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
             "2.根据系统知识库查询相关文档\n\n",
             "3.汇总文档信息\n\n",
             "4.展示文档详情\n\n",
-        }}
-    return {"task_plan": task_plan}
+        },
+        "user_intent": "doc",
+        }
+    return {"task_plan": task_plan, "user_intent": "doc"}

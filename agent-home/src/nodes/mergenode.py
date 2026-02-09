@@ -11,6 +11,7 @@ def aggregator_node(state: MergeAgentState) -> dict[str, Any]:
     doc = state.get("doc", "")
     doc_title = state.get("doc_title", "")
     user_intent = state.get("user_intent", "")
+    none_route = state.get("chat_node", "")
     # 2. 调试打印，看看拿到了什么
     print(f"    - 天气数据长度: {len(str(weather))}")
     print(f"    - RSS数据条数: {len(rss_data)}")
@@ -23,6 +24,10 @@ def aggregator_node(state: MergeAgentState) -> dict[str, Any]:
         for i, summary in enumerate(rss_data, 1):
             final_text += f"\n### 📌 来源 {i}\n{summary}\n"
     elif doc:
-            final_text += f"\n## 📰 用户需求的内容分析\n{doc}\n"
+                final_text += f"\n## 📰 用户需求的内容分析\n{doc}\n"
+    elif weather:
+        final_text += f"\n## 🌤️ 天气数据\n{weather}\n"
+    else:
+        final_text += f"\n## 🤖 用户意图\n{none_route}\n"
     # 4. 关键：必须返回 messages，这样 invoke 结果里才有 content
     return {"messages": [AIMessage(content=final_text)]}

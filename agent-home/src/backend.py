@@ -46,7 +46,7 @@ class TaskResponse(BaseModel):
     result: str
     details: str = ""
 
-async def event_generator(inputs):
+async def event_generator(inputs, thread_id: str = "default_thread"):
     """
     这是一个生成器，负责监听 LangGraph 的运行步骤，
     并把每一步的状态实时推送到前端。
@@ -57,7 +57,7 @@ async def event_generator(inputs):
     """
     try:
         # 使用 astream (异步流) 代替 invoke
-        async for event in graph.astream(inputs):
+        async for event in graph.astream(inputs, config={"configurable": {"thread_id": thread_id}}):
             for node_name, state in event.items():
                 logger.info("asteam 异步流信息日志, node_name=%s, state_keys=%s", node_name, list(state.keys()))
                 # 先处理特殊节点：意图理解，单独推送一条 intent 事件
@@ -88,18 +88,6 @@ async def event_generator(inputs):
                     log_message += f"📌 任务规划完毕，我将按照规划执行任务... \n\n{task_plan}\n\n"
                 elif node_name == "aggregator":
                     log_message = "✍️ 正在生成最终简报..."
-                if log_message:
-                    data = json.dumps(
-                        {
-                            "type": "log",
-                            "message": log_message,
-                            "node": node_name,
-                        },
-                        ensure_ascii=False,
-                    )
-                    yield f"data: {data}\n\n"
-                    await asyncio.sleep(0.2)
-
                 # 2. 如果是 doc_expert，推送详细的重试状态和日志
                 if node_name == "doc_expert":
                     # node_status 事件（用于显示重试次数/最终状态）
@@ -115,7 +103,6 @@ async def event_generator(inputs):
                     )
                     yield f"data: {status_payload}\n\n"
                     await asyncio.sleep(0.1)
-
                     # 逐条把 doc_logs 作为 log 事件发给前端
                     doc_logs = state.get("doc_logs") or []
                     for log_line in doc_logs:
@@ -156,6 +143,7 @@ def health_check():
 async def run_agent_task(request: TriggerRequest):
     logger.info(f"收到请求 user_id={request.user_id}, user_input={request.user_input}")
     user_input = request.user_input or "开始执行任务"
+    user_id = request.user_id or "default_user"
     inputs = {
         "messages": [("user", user_input)],
         "rss_data": [],
@@ -163,12 +151,13 @@ async def run_agent_task(request: TriggerRequest):
         "weather_report": "",
         "user_input": user_input,
         "user_intent": "",
-        "task_plan": []
+        "task_plan": [],
+        "doc_richtext": "",
     }
     
     # 返回流式响应，这样前端就能一点点收到数据了
     return StreamingResponse(
-        event_generator(inputs), 
+        event_generator(inputs, user_id), 
         media_type="text/event-stream"
     )
 

@@ -1,6 +1,7 @@
 from typing import Any
 from models.model import _llm
 from agent_states.states import MergeAgentState
+from langchain_core.messages import HumanMessage
 
 def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
     print(">>> [Intent Agent] 开始解析用户意图")
@@ -10,7 +11,7 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
         intent_text = "用户未提供额外输入，执行默认的每日资讯早报任务。"
         print(f"    -> 无用户输入，使用默认意图: {intent_text}")
         # 没有明确输入时，不强制跑天气或 RSS，由后续默认逻辑决定
-        return {"user_intent": intent_text, "intent_route": "doc"}
+        return {"user_intent": intent_text, "intent_route": "rss"}
 
     prompt = f"""
         你是一个“用户意图理解助手 + 路由器”。现在给你一段用户输入，请你：
@@ -32,6 +33,7 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
         {raw_input}
         """
     try:
+        
         res = _llm.invoke(prompt)
         full_text = getattr(res, "content", str(res)) or ""
         lines = [line for line in full_text.splitlines() if line.strip()]
@@ -46,6 +48,13 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
 
         intent_text = "\n".join(lines).strip() or "未能解析出清晰的用户意图。"
 
+        history = state.get("messages", [])
+        user_intent_value = ""
+        if history:
+            last_human = next((m for m in reversed(history) if isinstance(m, HumanMessage)), None)
+            if isinstance(last_human, HumanMessage):
+                user_intent_value = intent_text + "\n\n上一次用户消息：" + last_human.content
+                
         # 基于关键字进行一次“纠错式”路由判断，避免模型选错
         text_for_rule = (raw_input + "\n" + intent_text).lower()
         has_weather_kw = any(k in text_for_rule for k in ["天气", "气温", "下雨", "温度"])
@@ -65,4 +74,4 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
         route = "none"
         print(f"    X [Intent Agent] 发生错误: {e}")
 
-    return {"user_intent": intent_text, "intent_route": route}
+    return {"user_intent": user_intent_value, "intent_route": route}

@@ -1,6 +1,7 @@
+import re
 import time
 import threading
-import re
+import logging
 from typing import Any
 import concurrent.futures
 import concurrent.futures
@@ -11,34 +12,12 @@ from langchain_core.messages import HumanMessage
 from agent_states.states import MergeAgentState
 from basetools.dbtool import index_generated_doc_to_qdrant
 
-def _extract_title_from_markdown(doc: str) -> str | None:
-    """从 Markdown 中提取第一个一级或二级标题。"""
-    if not doc or not doc.strip():
-        return None
-    # 匹配 # 标题 或 ## 标题（去掉 # 和首尾空白）
-    m = re.search(r"^#{1,2}\s+(.+)$", doc.strip(), re.MULTILINE)
-    if m:
-        return m.group(1).strip()
-    return None
+logger = logging.getLogger(__name__)
 
-#保存文章到向量数据库的辅助函数
-def _save_doc_to_qdrant(text: str, user_intent: str, doc_title: str):
-    try:
-        threading.Thread(
-            target=index_generated_doc_to_qdrant, 
-            args=(
-                text, 
-                user_intent, 
-                doc_title
-                )
-            ).start()
-    except Exception as e:
-        print(f"    X [Doc] 索引到 Qdrant 失败: {str(e)}")
-    finally:
-        print(f"    -> 索引到 Qdrant 完成")
+
 # Node D: 文档专家（单次调用 + 超时标记，真正的重试由 graph 中的 doc_retry 节点完成）
 def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
-    print(">>> [Doc Agent] 开始工作")
+    logger.info(">>> [Doc Agent] 开始工作")
     doc_logs: list[str] = []
     doc_retry_count = int(state.get("doc_retry_count") or 0)
     doc_status = "running"
@@ -74,7 +53,7 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
             result = doc_executor.invoke({"messages": [HumanMessage(content=prompt)]})
             content = result["messages"][-1].content
             log_msg = f"正在获取文档信息的结果预览：{content[:100]}..."
-            print(f"    -> {log_msg}")
+            logger.info(f"    -> {log_msg}")
             doc_logs.append(log_msg)
             return content
         except Exception as e:
@@ -94,75 +73,99 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
             final_msg = future.result(timeout = SINGLE_TIMEOUT)
             doc_title = _extract_title_from_markdown(final_msg)
             if doc_title:
-                print(f"    <- 从 Markdown 提取标题: {doc_title[:80]}...")
+                logger.info(f"    <- 从 Markdown 提取标题: {doc_title[:80]}...")
                 _save_doc_to_qdrant(final_msg, state.get("user_intent", ""), doc_title)
             else:
-                print(f"    <- 未提取到标题，使用默认标题")
+                logger.info(f"    <- 未提取到标题，使用默认标题")
                 doc_title = "未命名文档"
-                print(f"    -> 未得到有效标题，使用默认")
+                logger.info(f"    -> 未得到有效标题，使用默认")
                 _save_doc_to_qdrant(final_msg, state.get("user_intent", ""), doc_title)
             elapsed = time.time() - start_time
             msg = f"文档节点本次调用成功（用时 {elapsed:.1f}秒）"
-            print(f"    <- [Doc] {msg}")
+            logger.info(f"    <- [Doc] {msg}")
             doc_logs.append(msg)
             doc_status = "success"
             doc_last_error = ""
-            return {
-                "doc": final_msg,
-                "doc_logs": doc_logs,
-                "doc_retry_count": doc_retry_count,
-                "doc_status": doc_status,
-                "doc_last_error": doc_last_error,
-            }
-
+            return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
     except concurrent.futures.TimeoutError:
         elapsed = time.time() - start_time
         if future.done():
             doc_title = _extract_title_from_markdown(future.result())
             if doc_title:
-                print(f"    <- 从 Markdown 提取标题: {doc_title[:80]}...")
+                logger.info(f"    <- 从 Markdown 提取标题: {doc_title[:80]}...")
                 _save_doc_to_qdrant(future.result(), state.get("user_intent", ""), doc_title)
             else:
-                print(f"    <- 未提取到标题，使用默认标题")
+                logger.info(f"    <- 未提取到标题，使用默认标题")
                 doc_title = "未命名文档"
-                print(f"    -> 未得到有效标题，使用默认")
+                logger.info(f"    -> 未得到有效标题，使用默认")
             elapsed = time.time() - start_time
             msg = f"文档节点本次调用成功（用时 {elapsed:.1f}秒）"
-            print(f"    <- [Doc] {msg}")
+            logger.info(f"    <- [Doc] {msg}")
             doc_logs.append(msg)
             doc_status = "success"
             doc_last_error = ""
-            return {
-                "doc": future.result(),
-                "doc_logs": doc_logs,
-                "doc_retry_count": doc_retry_count,
-                "doc_status": doc_status,
-                "doc_last_error": doc_last_error,
-            }
+            return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
         else:
             msg = f"文档节点单次调用超时（超过 {SINGLE_TIMEOUT} 秒，总用时 {elapsed:.1f}秒）"
-            print(f"    X [Doc] {msg}")
+            logger.error(f"    X [Doc] {msg}")
             doc_logs.append(f"⚠️ {msg}")
             doc_status = "timeout"
             doc_last_error = msg
-            return {
-                "doc": msg,
-                "doc_logs": doc_logs,
-                "doc_retry_count": doc_retry_count,
-                "doc_status": doc_status,
-                "doc_last_error": doc_last_error,
-            }
+            return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
     except Exception as e:
         elapsed = time.time() - start_time
         msg = f"文档节点调用异常: {e}（用时 {elapsed:.1f}秒）"
-        print(f"    X [Doc] {msg}")
+        logger.error(f"    X [Doc] {msg}")
         doc_logs.append(f"⚠️ {msg}")
         doc_status = "error"
         doc_last_error = str(e)
-        return {
-            "doc": msg or "文档节点调用异常",
-            "doc_logs": doc_logs,
-            "doc_retry_count": doc_retry_count,
-            "doc_status": doc_status,
-            "doc_last_error": doc_last_error,
-        }
+        return _doc_result(msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
+def _extract_title_from_markdown(doc: str) -> str | None:
+    """从 Markdown 中提取第一个一级或二级标题。"""
+    if not doc or not doc.strip():
+        return None
+    # 匹配 # 标题 或 ## 标题（去掉 # 和首尾空白）
+    m = re.search(r"^#{1,2}\s+(.+)$", doc.strip(), re.MULTILINE)
+    if m:
+        return m.group(1).strip()
+    return None
+
+#保存文章到向量数据库的辅助函数
+def _save_doc_to_qdrant(text: str, user_intent: str, doc_title: str):
+    try:
+        threading.Thread(
+            target=index_generated_doc_to_qdrant, 
+            args=(
+                text, 
+                user_intent, 
+                doc_title
+                )
+            ).start()
+    except Exception as e:
+        logger.error(f"    X [Doc] 索引到 Qdrant 失败: {str(e)}")
+    finally:
+        logger.info(f"    -> 索引到 Qdrant 完成")
+
+#封装好的结果返回函数
+def _doc_result(doc: str, doc_logs: list[str], doc_retry_count: int, doc_status: str, doc_last_error: str)->dict[str, Any]:
+    """
+    封装好的结果返回函数，用于返回文档节点结果
+    :param doc: 文档内容
+    :param doc_logs: 文档日志
+    :param doc_retry_count: 文档重试次数
+    :param doc_status: 文档状态
+    :param doc_last_error: 文档最后一次错误信息
+    :return: 文档节点结果
+    """
+    logger.info(f"    <- [Doc] {doc}")
+    logger.info(f"    <- [Doc] {doc_logs}")
+    logger.info(f"    <- [Doc] {doc_retry_count}")  
+    logger.info(f"    <- [Doc] {doc_status}")
+    logger.info(f"    <- [Doc] {doc_last_error}")
+    return {
+        "doc": doc,
+        "doc_logs": doc_logs,
+        "doc_retry_count": doc_retry_count,
+        "doc_status": doc_status,
+        "doc_last_error": doc_last_error,
+    }

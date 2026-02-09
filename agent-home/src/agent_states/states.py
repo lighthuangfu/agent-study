@@ -1,5 +1,5 @@
 import operator
-from typing import TypedDict, Annotated, List, Dict
+from typing_extensions import TypedDict, Annotated, List, Dict
 from langchain_core.messages import BaseMessage
 
 # 1. 定义自定义 State
@@ -41,3 +41,11 @@ class MergeAgentState(TypedDict):
     doc_last_error: str
 
     doc: str
+
+    doc_richtext: str
+
+    none_route: str
+
+    chat_node: str
+
+    chat_route: str
