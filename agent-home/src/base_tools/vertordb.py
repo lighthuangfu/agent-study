@@ -2,8 +2,7 @@
 import os
 from uuid import uuid4
 from datetime import datetime
-from typing import List, Dict
-from typing import List, Optional
+from typing import List, Dict, Optional
 from qdrant_client import QdrantClient
 from qdrant_client import models as qmodels
 from langchain_core.embeddings import Embeddings

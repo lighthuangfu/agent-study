@@ -19,17 +19,18 @@ body {
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(0,0,0,0.05);
   display: flex;
-  justify-content: center;
+  justify-content: flex-start; /* 通栏，内容从左侧开始 */
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
 .header-content {
-  width: 100%;
-  max-width: 800px;
+  width: 100%;              /* 占满整行 */
+  max-width: none;          /* 去掉居中限制 */
+  padding: 0 24px;          /* 左右留一点内边距 */
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;;
   align-items: center;
 }
 
@@ -42,11 +43,18 @@ body {
 
 /* === 3. 卡片容器 === */
 .content-wrapper {
-  max-width: 700px;
-  margin: 30px auto;
+  /* 悬浮在页面右下角的对话框容器 */
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 420px;
+  max-width: 90vw;
+  max-height: calc(100vh - 80px); /* 给顶部 header 留空间 */
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
+  z-index: 999; /* 保证悬浮在页面上方 */
 }
 
 .custom-card {
@@ -57,6 +65,17 @@ body {
   border: 1px solid rgba(255,255,255,0.5);
   transition: transform 0.3s ease;
   text-align: left; /* 确保卡片内容默认左对齐 */
+}
+
+/* 上部控制/终端区域和下部结果区域的高度比例 */
+.control-panel {
+  max-height: 55%;
+  overflow: hidden;
+}
+
+.result-panel {
+  max-height: 45%;
+  overflow: auto;
 }
 
 .control-panel:hover {
@@ -145,6 +164,42 @@ body {
   color: #a0aec0;
   font-size: 0.85rem;
   padding: 20px;
+}
+
+/* === A4 文档展示区域 === */
+.a4-container {
+  /* 左侧主内容区，为右侧 420px 悬浮控制台留出空间 */
+  margin: 30px 480px 30px 40px;
+}
+
+.a4-page {
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.05), 0 18px 45px rgba(15, 23, 42, 0.18);
+  padding: 32px 40px;
+  max-width: 840px;      /* 接近 A4 宽度比例 */
+  min-height: 60vh;
+  box-sizing: border-box;
+}
+
+.a4-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.a4-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.a4-body {
+  margin-top: 8px;
 }
 
 /* 

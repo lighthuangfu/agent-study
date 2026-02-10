@@ -3,7 +3,6 @@ import os
 import uvicorn
 import logging
 import json
-import asyncio
 import urllib3
 import langchain
 from dotenv import load_dotenv
@@ -17,7 +16,7 @@ from typing import Optional
 # 这样所有模块都可以通过 os.getenv() 访问这些变量
 load_dotenv()
 
-from agent.graph import graph
+from agent.graph import doc_graph, graph
 os.environ["USER_AGENT"] = "MyAIUserAgent/1.0"
 langchain.debug = True
 # 屏蔽警告
@@ -82,8 +81,6 @@ async def event_generator(inputs, thread_id: str = "default_thread"):
                     log_message = "🌤️ 天气数据获取完毕..."
                 elif node_name == "rss_expert":
                     log_message = "📰 RSS 订阅源抓取完毕..."
-                elif node_name == "doc_expert":
-                    log_message = "📰 文档节点执行完毕，正在整理重试日志和结果..."
                 elif node_name == "task_plan":
                     task_plan = state.get("task_plan") or []
                     sorted_task_plan = sorted(task_plan)
@@ -102,35 +99,25 @@ async def event_generator(inputs, thread_id: str = "default_thread"):
                         yield f"data: {log_message}\n\n"
                 elif node_name == "aggregator":
                     log_message = "✍️ 正在生成最终简报..."
-                # 2. 如果是 doc_expert，推送详细的重试状态和日志
-                if node_name == "doc_expert":
-                    # node_status 事件（用于显示重试次数/最终状态）
-                    status_payload = json.dumps(
-                        {
-                            "type": "node_status",
-                            "node": "doc_expert",
-                            "status": state.get("doc_status", ""),
-                            "retry_count": state.get("doc_retry_count", 0),
-                            "last_error": state.get("doc_last_error", ""),
-                        },
-                        ensure_ascii=False,
-                    )
-                    yield f"data: {status_payload}\n\n"
-                    await asyncio.sleep(0.1)
+                # 文档子图在主图中节点名是 doc_graph（内部节点名是 doc_expert）
+                # 这里监听的是主图节点名，因此需要判断 doc_graph 才能拿到 doc_logs
+                elif node_name == "doc_graph":
                     # 逐条把 doc_logs 作为 log 事件发给前端
                     doc_logs = state.get("doc_logs") or []
+                    logger.info(f"    -> doc_graph doc_logs: {doc_logs}")
+                    log_message = ""
                     for log_line in doc_logs:
-                        line_payload = json.dumps(
+                        log_message += f"{log_line}\n"
+                    if log_message:
+                        log_message = json.dumps(
                             {
                                 "type": "log",
                                 "node": "doc_expert",
-                                "message": log_line,
+                                "message": log_message,
                             },
                             ensure_ascii=False,
                         )
-                        yield f"data: {line_payload}\n\n"
-                        await asyncio.sleep(0.05)
-
+                        yield f"data: {log_message}\n\n"
         # 3. 这里的 state 是最后一次循环的 state，包含了最终结果
         # 注意：aggregator_node 的输出包含 messages，最后一条通常是结果
         final_message = state["messages"][-1].content

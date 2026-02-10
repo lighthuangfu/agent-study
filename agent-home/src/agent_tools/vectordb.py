@@ -1,7 +1,7 @@
 from langchain_core.tools import tool
 from typing import List, Optional, Dict
 from uuid import uuid4
-from basetools.dbtool import _get_qdrant_client
+from base_tools.vertordb import _get_qdrant_client
 @tool(
     description=(
         "将已经计算好的向量写入 Qdrant 向量数据库。\n"

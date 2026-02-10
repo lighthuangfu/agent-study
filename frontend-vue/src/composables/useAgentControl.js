@@ -38,7 +38,9 @@ export function useAgentControl() {
         user_id: 'vue_user',
         user_input: userInput.value || '',
       }
-      const response = await fetch('http://172.16.4.232:8000/run-task', {
+      // 后端地址：同机调试用 localhost，或设置 .env 里 VITE_API_BASE_URL
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiBase}/run-task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(playload),
@@ -84,8 +86,7 @@ export function useAgentControl() {
                   }`
                 )
               } else if (data.type === 'result') {
-                reportContent.value = data.content
-                addLog('✅ 任务执行完毕！')
+                playTypewriter(data.content)
               } else if (data.type === 'error') {
                 addLog(`❌ 错误: ${data.message}`)
                 ElMessage.error(data.message)
@@ -117,7 +118,28 @@ export function useAgentControl() {
       }
     })
   }
+  const isTyping = ref(false)
 
+  const playTypewriter = async (fullText, speed = 50) => {
+    isTyping.value = true
+    reportContent.value = ''
+
+    for (let i = 0; i < fullText.length; i++) {
+      reportContent.value += fullText[i]
+      await new Promise((resolve) => setTimeout(resolve, speed))
+      // 定期自动滚动到页面底部，保证最新内容在视口内
+      if (i % 5 === 0) {
+        await nextTick()
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
+          behavior: 'smooth',
+        })
+      }
+    }
+
+    isTyping.value = false
+    addLog('✅ 任务执行完毕！')
+  }
   return {
     // state
     isRunning,

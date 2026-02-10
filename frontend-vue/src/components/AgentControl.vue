@@ -12,8 +12,25 @@
       </el-header>
 
       <el-main>
+        <!-- 左侧 A4 样式文档区 -->
+        <div class="a4-container" v-if="reportContent">
+          <div class="a4-page">
+            <div class="a4-header">
+              <h2>执行报告</h2>
+              <el-button link type="primary" @click="clearAll">清空</el-button>
+            </div>
+            <div class="a4-body markdown-viewer">
+              <div v-if="intentSummary" class="intent-summary">
+                <h4>🎯 意图理解</h4>
+                <p class="intent-text">{{ intentSummary }}</p>
+              </div>
+              <div class="markdown-body" v-html="renderedMarkdown"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧悬浮控制台 -->
         <div class="content-wrapper">
-          
           <!-- 控制面板 -->
           <div class="custom-card control-panel">
             <div class="card-title">
@@ -67,23 +84,6 @@
               </div>
             </transition>
           </div>
-
-          <!-- 结果展示 -->
-          <transition name="el-zoom-in-bottom">
-            <div v-if="reportContent" class="custom-card result-panel">
-              <div class="card-header-row">
-              <h3>📊 执行报告</h3>
-                <el-button link type="primary" @click="clearAll">清空</el-button>
-              </div>
-              <div class="markdown-viewer">
-                <div v-if="intentSummary" class="intent-summary">
-                  <h4>🎯 意图理解</h4>
-                  <p class="intent-text">{{ intentSummary }}</p>
-                </div>
-                <div class="markdown-body" v-html="renderedMarkdown"></div>
-              </div>
-            </div>
-          </transition>
 
         </div>
       </el-main>

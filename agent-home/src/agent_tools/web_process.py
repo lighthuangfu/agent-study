@@ -1,7 +1,7 @@
 import requests
 from langchain_core.tools import tool
 from langchain_community.document_loaders import WebBaseLoader
-from basetools.dbtool import _split_text_into_chunks, _embed_documents
+from base_tools.vertordb import _split_text_into_chunks, _embed_documents
 from agent_tools.vectordb import save_vectors_to_qdrant
 
 # 2. 定义 Web Fetch 工具

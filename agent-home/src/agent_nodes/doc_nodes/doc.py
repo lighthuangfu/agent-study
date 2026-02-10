@@ -10,7 +10,7 @@ from agent_tools.tools import ALL_TOOLS
 from langchain.agents import create_agent
 from agent_states.states import MergeAgentState
 from langchain_core.messages import HumanMessage
-from basetools.dbtool import index_generated_doc_to_qdrant
+from base_tools.vertordb import index_generated_doc_to_qdrant
 
 logger = logging.getLogger(__name__)
 

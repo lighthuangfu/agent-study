@@ -16,6 +16,7 @@ def doc_retry_node(state: MergeAgentState) -> dict[str, Any]:
     else:
         doc_logs.append(f"⚠️ 文档服务失败（已重试 {doc_retry_count} 次）")
     return _doc_result(doc_logs, doc_retry_count, doc_status, doc_last_error)
+    
 def _doc_result(doc: str, doc_logs: list[str], doc_retry_count: int, doc_status: str, doc_last_error: str)->dict[str, Any]:
     """
     封装好的结果返回函数，用于返回文档节点结果
