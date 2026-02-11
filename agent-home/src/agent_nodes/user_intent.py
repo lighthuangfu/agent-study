@@ -19,11 +19,11 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
         2. 然后根据意图判断用户更像是在要「天气」还是「RSS 新闻」，或者两者都不是。
         3. 如果用户需求与天气和新闻都无关，则选择 ROUTE=doc
 
-        你必须在最后一行，单独输出一个路由标签，格式严格为（只能三选一）：
+        你必须在最后一行，单独输出一个路由标签，格式严格为（只能四选一）：
         - ROUTE=weather
         - ROUTE=rss
         - ROUTE=doc
-
+        - ROUTE=doc_chain
         其中：
         - 当用户主要关心天气、温度、下雨、穿衣等信息时，选择 ROUTE=weather
         - 当用户想看新闻、资讯、热点、RSS 等内容时，选择 ROUTE=rss
@@ -66,11 +66,14 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
         text_for_rule = (raw_input + "\n" + intent_text).lower()
         has_weather_kw = any(k in text_for_rule for k in ["天气", "气温", "下雨", "温度"])
         has_rss_kw = any(k in text_for_rule for k in ["rss", "新闻", "资讯", "头条", "热点"])
+        has_doc_kw = any(k in text_for_rule for k in ["文档续写", "重写", "重新续写", "改写"])
 
         if has_weather_kw and not has_rss_kw:
             route = "weather"
         elif has_rss_kw and not has_weather_kw:
             route = "rss"
+        elif has_doc_kw:
+            route = "doc_chain"
         else:
             route = "doc"
 

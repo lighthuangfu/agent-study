@@ -2,7 +2,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from agent_tools.web_process import web_fetch
 from agent_tools.web_process import web_browser
 from agent_tools.web_process import index_web_page_to_qdrant
-from agent_tools.rss import rss_reader
+from agent_tools.subscribe import rss_reader
 from agent_tools.location import get_current_location
 from agent_tools.weather import get_weather
 from agent_tools.vectordb import save_vectors_to_qdrant

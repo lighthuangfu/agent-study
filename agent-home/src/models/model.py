@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI # pyright: ignore[reportMissingImports]
+from langchain_openai import ChatOpenAI  # pyright: ignore[reportMissingImports]
 from agent_tools.tools import ALL_TOOLS  # 导入刚才定义的工具
+from agent.agent_builder import create_custom_agent
 
 # 加载环境变量（幂等操作，多次调用安全）
 # 如果 backend.py 已经调用过，这里不会重复加载
@@ -25,5 +26,4 @@ _llm = ChatOpenAI(
 )
 
 # 绑定工具，生成增强版模型
-# 以后节点里直接用这个 model_with_tools
 model_with_tools = _llm.bind_tools(ALL_TOOLS)

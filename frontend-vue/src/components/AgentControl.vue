@@ -19,12 +19,52 @@
               <h2>执行报告</h2>
               <el-button link type="primary" @click="clearAll">清空</el-button>
             </div>
-            <div class="a4-body markdown-viewer">
+            <div
+              ref="a4BodyRef"
+              class="a4-body markdown-viewer"
+              @mouseup="onDocumentSelection"
+            >
               <div v-if="intentSummary" class="intent-summary">
                 <h4>🎯 意图理解</h4>
                 <p class="intent-text">{{ intentSummary }}</p>
               </div>
               <div class="markdown-body" v-html="renderedMarkdown"></div>
+            </div>
+            <!-- 选中后出现的 AI 改写浮动按钮 -->
+            <Teleport to="body">
+              <button
+                v-if="showRewriteButton && !rewriteLoading"
+                class="rewrite-float-btn"
+                :style="{ top: rewriteButtonPosition.top + 'px', left: rewriteButtonPosition.left + 'px' }"
+                @click="requestRewrite"
+              >
+                ✏️ AI 改写
+              </button>
+            </Teleport>
+            <!-- 改写结果：补充说明 + 流式显示 + 应用 -->
+            <div v-if="rewriteLoading || rewriteResult || rewriteError" class="rewrite-panel">
+              <div class="rewrite-panel-header">
+                <span>改写结果</span>
+                <el-button link type="primary" size="small" @click="clearRewrite">关闭</el-button>
+              </div>
+              <!-- 用户补充说明 / 续写意图 -->
+              <div class="rewrite-hint-area">
+                <el-input
+                  v-model="rewriteHint"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="可在此补充改写要求或续写意图，例如：更正式一点、突出 2026 年增长目标等"
+                />
+              </div>
+              <div v-if="rewriteError" class="rewrite-error">{{ rewriteError }}</div>
+              <div v-else class="rewrite-content">
+                <span v-if="rewriteLoading && !rewriteResult">正在改写…</span>
+                <span>{{ rewriteResult }}</span>
+                <span v-if="rewriteLoading" class="rewrite-cursor">|</span>
+              </div>
+              <div v-if="rewriteResult && !rewriteLoading" class="rewrite-actions">
+                <el-button type="primary" size="small" @click="applyRewrite">应用替换</el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -98,18 +138,26 @@
 import { useAgentControl } from '../composables/useAgentControl'
 
 const {
-  // state
   isRunning,
   reportContent,
   logs,
   logContainer,
   userInput,
   intentSummary,
-  // computed
   renderedMarkdown,
-  // methods
   clearAll,
   handleRunTaskStream,
+  showRewriteButton,
+  rewriteButtonPosition,
+  rewriteResult,
+  rewriteHint,
+  rewriteLoading,
+  rewriteError,
+  a4BodyRef,
+  onDocumentSelection,
+  requestRewrite,
+  applyRewrite,
+  clearRewrite,
 } = useAgentControl()
 </script>
 

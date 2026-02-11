@@ -7,10 +7,12 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   color: #2c3e50;
+  width: 100%;
 }
 
 .app-container, .full-height {
   min-height: 100vh;
+  width: 1024px;
 }
 
 /* === 2. 顶部导航 === */
@@ -173,11 +175,12 @@ body {
 }
 
 .a4-page {
+  width: 840px;          /* A4 纸视觉宽度（210mm 约 794px，取 840 留边距） */
+  max-width: calc(100vw - 560px); /* 小屏时随视口缩小，为右侧控制台留约 520px */
   background: #ffffff;
   border-radius: 6px;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.05), 0 18px 45px rgba(15, 23, 42, 0.18);
   padding: 32px 40px;
-  max-width: 840px;      /* 接近 A4 宽度比例 */
   min-height: 60vh;
   box-sizing: border-box;
 }
@@ -185,7 +188,7 @@ body {
 .a4-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: left;
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid #e2e8f0;
@@ -200,6 +203,68 @@ body {
 
 .a4-body {
   margin-top: 8px;
+  user-select: text; /* 确保报告内容可选中 */
+}
+
+/* 选中后浮动的 AI 改写按钮 */
+.rewrite-float-btn {
+  position: fixed;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.rewrite-float-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5);
+}
+
+/* 改写结果面板：实时显示流式结果 */
+.rewrite-panel {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.rewrite-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #1a202c;
+}
+.rewrite-content {
+  min-height: 48px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  color: #2d3748;
+}
+.rewrite-cursor {
+  animation: rewrite-blink 0.8s step-end infinite;
+  color: #667eea;
+}
+@keyframes rewrite-blink {
+  50% { opacity: 0; }
+}
+.rewrite-error {
+  color: #e53e3e;
+  padding: 10px;
+}
+.rewrite-actions {
+  margin-top: 12px;
 }
 
 /* 

@@ -56,4 +56,14 @@ def task_plan_node(state: MergeAgentState) -> dict[str, Any]:
         },
         "intent_route": "doc",
         }
+    elif task_plan == "ROUTE=doc_chain":
+        return {"task_plan": {
+            "我将进行文档续写计划\n\n",
+            "1.加载文档续写软件\n\n",
+            "2.续写文档\n\n",
+            "3.汇总文档续写信息\n\n",
+            "4.展示文档续写详情\n\n",
+        },
+        "intent_route": "doc_chain",
+        }
     return {"task_plan": task_plan, "intent_route": "doc"}

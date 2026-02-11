@@ -10,6 +10,7 @@ from agent_nodes.doc_nodes.retry import doc_retry_node
 from agent_nodes.merge_node import aggregator_node
 from agent_nodes.task_plan import task_plan_node
 from agent_nodes.chat import chat_node
+from agent_nodes.doc_nodes.doc_chain import doc_chain_node
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ def _route_from_intent(state: MergeAgentState) -> str:
     根据意图节点的输出决定后续流向。
     """
     route = (state.get("intent_route") or "doc").lower()
-    if route in ("weather", "rss", "doc"):
+    if route in ("weather", "rss", "doc", "doc_chain"):
         return route
     return "doc"
 
@@ -80,6 +81,7 @@ doc_graph.add_conditional_edges(
         "done": END,
     },
 )
+
 doc_graph = doc_graph.compile()
 
 # --- 3. 构建图 (Intent Routing Graph) ---
@@ -92,8 +94,8 @@ workflow.add_node("weather_expert", weather_agent_node)
 workflow.add_node("rss_expert", rss_agent_node)
 workflow.add_node("aggregator", aggregator_node)
 workflow.add_node("task_plan", task_plan_node)
+workflow.add_node("doc_chain", doc_chain_node)
 workflow.add_node("doc_graph", doc_graph)
-
 # 起点：先做意图理解
 workflow.add_edge(START, "chat")
 workflow.add_edge("chat", "intent_expert")
@@ -109,6 +111,7 @@ workflow.add_conditional_edges(
         "weather": "weather_expert",
         "rss": "rss_expert",
         "doc": "doc_graph",
+        "doc_chain": "doc_chain",
     },
 )
 

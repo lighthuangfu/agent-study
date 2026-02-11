@@ -42,7 +42,11 @@ class MergeAgentState(TypedDict):
 
     doc: str
 
-    doc_richtext: str
+    #文档续写字段，最终要追加到doc字段中
+    doc_chain_result: List[str]
+
+    #续写的文档部分
+    doc_rewritten: str
 
     none_route: str
 

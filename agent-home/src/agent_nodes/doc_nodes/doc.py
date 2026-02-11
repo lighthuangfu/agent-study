@@ -3,7 +3,6 @@ import os
 import time
 import logging
 import threading
-import concurrent.futures
 from typing import Any
 from models.model import _llm, api_key
 from agent_tools.tools import ALL_TOOLS
@@ -41,20 +40,21 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         {base_url}?api_key={api_key}
         请直接输出文档内容，按照用户需求展示文档内容。 
         注意：
-        - 必须包含具体数据和图表
-        - 必须包含具体分析和结论
-        - 必须包含具体建议和行动计划
-        - 必须包含具体风险和机会
-        - 必须包含具体机会和行动计划
-        - 不要重复重复的信息
+        - 尽量包含具体数据和图表
+        - 尽量包含具体分析和结论
+        - 尽量包含具体建议和行动计划
+        - 尽量包含具体风险和机会
+        - 尽量包含具体机会和行动计划
+        - 必须不要重复重复的信息
+        - 内容必须丰富，细致，专业
         - 必须用中文显示，这一点要强制执行，不要违反。
         请严格使用 Markdown 格式输出链接，格式为：[标题](URL)。注意：不要在方括号 [] 和圆括号 () 之间加空格。如果标题中包含方括号，请将其转义或替换为其他符号。
         """
         try:
-            logger.info(f"    -> 正在创建文档子 Agent，开始调用工具生成内容…\n\n{prompt}")
-            doc_executor = create_agent(_llm, ALL_TOOLS)
-            doc_logs.append("已创建文档子 Agent，开始调用工具生成内容…")
-            result = doc_executor.invoke({"messages": [HumanMessage(content=prompt)]})
+            logger.info(f"    -> 开始调用工具生成文档内容…\n\n{prompt}")
+            doc_logs.append("开始调用工具生成内容…")
+            local_executor = create_agent(model=_llm, tools=ALL_TOOLS, name="doc_expert")
+            result = local_executor.invoke({"messages": [HumanMessage(content=prompt)]})
             content = result["messages"][-1].content
             log_msg = f"正在获取文档信息的结果预览：{content[:100]}..."
             logger.info(f"    -> {log_msg}")
@@ -66,56 +66,24 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
             raise Exception(err)
         finally:
             doc_logs.append("文档查询完成")
-    # 单次调用的超时（秒），真正的重试在 graph 中通过 doc_retry 节点完成
-    SINGLE_TIMEOUT = 420
     start_time = time.time()
-    msg = ""
     try:
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(_run_doc)
-            # 等待最多 SINGLE_TIMEOUT 秒
-            final_msg = future.result(timeout = SINGLE_TIMEOUT)
-            doc_title = _extract_title_from_markdown(final_msg)
-            if doc_title:
-                logger.info(f"    <- 从 Markdown 提取标题: {doc_title[:80]}...")
-                _save_doc_to_qdrant(final_msg, state.get("user_intent", ""), doc_title)
-            else:
-                logger.info(f"    <- 未提取到标题，使用默认标题")
-                doc_title = "未命名文档"
-                logger.info(f"    -> 未得到有效标题，使用默认")
-                _save_doc_to_qdrant(final_msg, state.get("user_intent", ""), doc_title)
-            elapsed = time.time() - start_time
-            msg = f"文档节点本次调用成功（用时 {elapsed:.1f}秒）"
-            logger.info(f"    <- [Doc] {msg}")
-            doc_logs.append(msg)
-            doc_status = "success"
-            doc_last_error = ""
-            return _doc_result(final_msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
-    except concurrent.futures.TimeoutError:
-        elapsed = time.time() - start_time
-        if future.done():
-            doc_title = _extract_title_from_markdown(future.result())
-            if doc_title:
-                logger.info(f"    <- 从 Markdown 提取标题: {doc_title[:80]}...")
-                _save_doc_to_qdrant(future.result(), state.get("user_intent", ""), doc_title)
-            else:
-                logger.info(f"    <- 未提取到标题，使用默认标题")
-                doc_title = "未命名文档"
-                logger.info(f"    -> 未得到有效标题，使用默认")
-            elapsed = time.time() - start_time
-            msg = f"文档节点本次调用成功（用时 {elapsed:.1f}秒）"
-            logger.info(f"    <- [Doc] {msg}")
-            doc_logs.append(msg)
-            doc_status = "success"
-            doc_last_error = ""
-            return _doc_result(future.result(), doc_logs, doc_retry_count, doc_status, doc_last_error)
+        final_msg = _run_doc()
+        doc_title = _extract_title_from_markdown(final_msg)
+        if doc_title:
+            logger.info(f"    <- 从 Markdown 提取标题: {doc_title[:80]}...")
+            _save_doc_to_qdrant(final_msg, state.get("user_intent", ""), doc_title)
         else:
-            msg = f"文档节点单次调用超时（超过 {SINGLE_TIMEOUT} 秒，总用时 {elapsed:.1f}秒）"
-            logger.error(f"    X [Doc] {msg}")
-            doc_logs.append(f"⚠️ {msg}")
-            doc_status = "timeout"
-            doc_last_error = msg
-            return _doc_result(future.result(), doc_logs, doc_retry_count, doc_status, doc_last_error)
+            logger.info(f"    <- 未提取到标题，使用默认标题")
+            doc_title = "未命名文档"
+            _save_doc_to_qdrant(final_msg, state.get("user_intent", ""), doc_title)
+        elapsed = time.time() - start_time
+        msg = f"文档节点本次调用成功（用时 {elapsed:.1f}秒）"
+        logger.info(f"    <- [Doc] {msg}")
+        doc_logs.append(msg)
+        doc_status = "success"
+        doc_last_error = ""
+        return _doc_result(final_msg, doc_logs, doc_retry_count, doc_status, doc_last_error)
     except Exception as e:
         elapsed = time.time() - start_time
         msg = f"文档节点调用异常: {e}（用时 {elapsed:.1f}秒）"
@@ -123,7 +91,8 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         doc_logs.append(f"⚠️ {msg}")
         doc_status = "error"
         doc_last_error = str(e)
-        return _doc_result(future.result(), doc_logs, doc_retry_count, doc_status, doc_last_error)
+        return _doc_result("", doc_logs, doc_retry_count, doc_status, doc_last_error)
+
 def _extract_title_from_markdown(doc: str) -> str | None:
     """从 Markdown 中提取第一个一级或二级标题。"""
     if not doc or not doc.strip():
