@@ -35,7 +35,6 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         prompt = f"""
         你是高级分析师助手。需要根据用户需求来展示文档内容。用户需求是：{user_intent}
         你可以用以下网址进行资料检索：
-        https://huggingface.co/datasets
         https://www.kaggle.com/datasets
         {base_url}?api_key={api_key}
         请直接输出文档内容，按照用户需求展示文档内容。 
@@ -48,6 +47,7 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         - 必须不要重复重复的信息
         - 内容必须丰富，细致，专业
         - 必须用中文显示，这一点要强制执行，不要违反。
+        - 请不要输出无效的信息
         请严格使用 Markdown 格式输出链接，格式为：[标题](URL)。注意：不要在方括号 [] 和圆括号 () 之间加空格。如果标题中包含方括号，请将其转义或替换为其他符号。
         """
         try:

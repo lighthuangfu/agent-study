@@ -11,6 +11,7 @@ from agent_nodes.merge_node import aggregator_node
 from agent_nodes.task_plan import task_plan_node
 from agent_nodes.chat import chat_node
 from agent_nodes.doc_nodes.doc_chain import doc_chain_node
+from langgraph.checkpoint.memory import InMemorySaver
 
 logger = logging.getLogger(__name__)
 
@@ -122,4 +123,5 @@ workflow.add_edge("doc_graph", "aggregator")  # 子图结束后由主图接到 a
 workflow.add_edge("aggregator", END)
 
 # 编译
-graph = workflow.compile()
+checkpointer = InMemorySaver()
+graph = workflow.compile(checkpointer=checkpointer)

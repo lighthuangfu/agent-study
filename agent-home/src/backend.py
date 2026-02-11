@@ -6,21 +6,21 @@ import logging
 import json
 import urllib3
 import langchain
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
-from langchain_core.messages import HumanMessage
 from time import sleep
+from fastapi import FastAPI
+from typing import Optional
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from fastapi.responses import StreamingResponse
+from langchain_core.messages import HumanMessage
+from fastapi.middleware.cors import CORSMiddleware
 
 
 # 在应用启动时加载 .env 文件中的环境变量
 # 这样所有模块都可以通过 os.getenv() 访问这些变量
 load_dotenv()
 
-from agent.graph import doc_graph, graph
+from agent.graph import graph
 from models.model import _llm
 
 os.environ["USER_AGENT"] = "MyAIUserAgent/1.0"
@@ -59,23 +59,25 @@ class TaskResponse(BaseModel):
 
 async def event_generator(inputs, thread_id: str = "default_thread"):
     """监听 LangGraph 执行过程，并通过 SSE 把关键步骤推送给前端。"""
-    last_state = None
     try:
-        async for event in graph.astream(
+       
+        async for named_event, messages_event, msg_chunks in graph.astream(
             inputs,
-            stream_mode="messages",
+            stream_mode=["messages","updates"],
             subgraphs=True,
             config={"configurable": {"thread_id": thread_id}},
         ):
-            logger.info("event is %s", event)
-            meta_data = event[1][1]
-            target_node = "doc_expert"
-            if meta_data.get('lc_agent_name') == target_node:
-                result_content = event[1][0]
-                logger.info("result_content is %s", result_content)
-                if result_content.content:
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': result_content.content}, ensure_ascii=False)}\n\n"
-                    sleep(0.2)
+            if messages_event == 'updates':
+                logger.info("msg_chunks %s", msg_chunks)            
+            elif messages_event == 'messages': #messages打字机效果
+                msg_data = msg_chunks[0] #取出元组数据
+                node_name = msg_chunks[1].get('lc_agent_name', 'Unknown node')
+                logger.info("node_name %s", node_name)
+                target_node = "doc_expert"
+                if node_name == target_node:
+                    if hasattr(msg_data, 'content') and msg_data.content:
+                        content_data = msg_data.content
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content_data}, ensure_ascii=False)}\n\n"
     except Exception as e:
         logger.error(f"Error during streaming: {e}")
         error_data = json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False)
