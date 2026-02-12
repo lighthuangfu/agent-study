@@ -2,6 +2,9 @@ from typing import Any
 from models.model import _llm
 from agent_states.states import MergeAgentState
 from langchain_core.messages import HumanMessage
+from langchain.agents import create_agent
+from agent_tools.tools import ALL_TOOLS
+from models.model import _agent
 
 def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
     print(">>> [Intent Agent] 开始解析用户意图")
@@ -23,7 +26,6 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
         - ROUTE=weather
         - ROUTE=rss
         - ROUTE=doc
-        - ROUTE=doc_chain
         其中：
         - 当用户主要关心天气、温度、下雨、穿衣等信息时，选择 ROUTE=weather
         - 当用户想看新闻、资讯、热点、RSS 等内容时，选择 ROUTE=rss
@@ -33,8 +35,7 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
         {raw_input}
         """
     try:
-        
-        res = _llm.invoke(prompt)
+        res = _agent.invoke({"messages": [HumanMessage(content=prompt)]}, config={"configurable": {"thread_id": "vue_user"}})
         full_text = getattr(res, "content", str(res)) or ""
         lines = [line for line in full_text.splitlines() if line.strip()]
 
@@ -72,8 +73,6 @@ def intent_agent_node(state: MergeAgentState) -> dict[str, Any]:
             route = "weather"
         elif has_rss_kw and not has_weather_kw:
             route = "rss"
-        elif has_doc_kw:
-            route = "doc_chain"
         else:
             route = "doc"
 

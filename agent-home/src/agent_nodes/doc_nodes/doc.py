@@ -53,8 +53,8 @@ def doc_agent_node(state: MergeAgentState) -> dict[str, Any]:
         try:
             logger.info(f"    -> 开始调用工具生成文档内容…\n\n{prompt}")
             doc_logs.append("开始调用工具生成内容…")
-            local_executor = create_agent(model=_llm, tools=ALL_TOOLS, name="doc_expert")
-            result = local_executor.invoke({"messages": [HumanMessage(content=prompt)]})
+            agent = create_agent(model=_llm, tools=ALL_TOOLS, name="doc_expert")
+            result = agent.invoke({"messages": [HumanMessage(content=prompt)]}, config={"configurable": {"thread_id": "vue_user"}})
             content = result["messages"][-1].content
             log_msg = f"正在获取文档信息的结果预览：{content[:100]}..."
             logger.info(f"    -> {log_msg}")

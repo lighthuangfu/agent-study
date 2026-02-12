@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI  # pyright: ignore[reportMissingImports]
 from agent_tools.tools import ALL_TOOLS  # 导入刚才定义的工具
 from agent.agent_builder import create_custom_agent
+from langchain.agents import create_agent
 
 # 加载环境变量（幂等操作，多次调用安全）
 # 如果 backend.py 已经调用过，这里不会重复加载
@@ -27,3 +28,6 @@ _llm = ChatOpenAI(
 
 # 绑定工具，生成增强版模型
 model_with_tools = _llm.bind_tools(ALL_TOOLS)
+
+# 全局共用的 Agent（供 rss/weather/doc 等节点调用）
+_agent = create_agent(model=_llm, tools=ALL_TOOLS, name="assistant")

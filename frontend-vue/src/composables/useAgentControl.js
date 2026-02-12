@@ -193,7 +193,11 @@ export function useAgentControl() {
       const response = await fetch(`${apiBase}/rewrite-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: selectedText.value, hint: rewriteHint.value }),
+        body: JSON.stringify({
+          text: selectedText.value,
+          hint: rewriteHint.value,
+          thread_id: 'vue_user', // 与 /run-task 的 user_id 一致，才能从主图读取 doc 上下文
+        }),
       })
       if (!response.ok) throw new Error('请求失败')
       const reader = response.body.getReader()

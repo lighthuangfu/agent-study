@@ -12,7 +12,6 @@ from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -21,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 from agent.graph import graph
+from agent.rewrite_graph import rewrite_graph
 from models.model import _llm
 
 os.environ["USER_AGENT"] = "MyAIUserAgent/1.0"
@@ -50,6 +50,13 @@ class TriggerRequest(BaseModel):
 class RewriteRequest(BaseModel):
     text: str
     hint: Optional[str] = ""  # 用户额外补充说明/续写意图，用于指导改写
+    thread_id: Optional[str] = None  # 与 /run-task 的 user_id 一致时，从主图读取 doc 上下文
+
+
+# 文档生成/改写中断后，用户提交改写指令并继续（支持循环改写）
+class DocRewriteContinueRequest(BaseModel):
+    thread_id: str  # 必须与 /run-task 时的 user_id 一致
+    rewrite_instruction: str  # 改写要求；输入「完成」/「done」则结束改写，进入汇总
 
 # 定义响应数据模型
 class TaskResponse(BaseModel):
@@ -57,107 +64,18 @@ class TaskResponse(BaseModel):
     details: str = ""
 
 
-async def event_generator(inputs, thread_id: str = "default_thread"):
-    """监听 LangGraph 执行过程，并通过 SSE 把关键步骤推送给前端。"""
-    try:
-       
-        async for named_event, messages_event, msg_chunks in graph.astream(
-            inputs,
-            stream_mode=["messages","updates"],
-            subgraphs=True,
-            config={"configurable": {"thread_id": thread_id}},
-        ):
-            if messages_event == 'updates':
-                logger.info("msg_chunks %s", msg_chunks)            
-            elif messages_event == 'messages': #messages打字机效果
-                msg_data = msg_chunks[0] #取出元组数据
-                node_name = msg_chunks[1].get('lc_agent_name', 'Unknown node')
-                logger.info("node_name %s", node_name)
-                target_node = "doc_expert"
-                if node_name == target_node:
-                    if hasattr(msg_data, 'content') and msg_data.content:
-                        content_data = msg_data.content
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': content_data}, ensure_ascii=False)}\n\n"
-    except Exception as e:
-        logger.error(f"Error during streaming: {e}")
-        error_data = json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False)
-        yield f"data: {error_data}\n\n"
+
 
 @app_server.get("/")
 def health_check():
+    """探活专用"""
     return {"status": "running"}
 
 
-async def _rewrite_stream_generator(text: str, hint: str = ""):
-    """调用 LLM 改写选中内容，按 SSE 格式 yield。先尝试流式；若 content 为空则回退为 invoke 再一次性返回。"""
-    extra = (hint or "").strip()
-    extra_block = ""
-    if extra:
-        extra_block = f"\n用户补充要求/续写意图：{extra}"
-    prompt = f"""请对以下内容进行改写，保持原意、优化表达，使语句更通顺专业。只输出改写后的正文，不要加解释或前缀。
-    - 改写后的内容必须符合用户意图
-    - 改写后的内容必须符合用户要续写的内容
-    - 改写后的内容不能和原内容重复
-    原文：
-    {text}
-    {extra_block}
-    """
-    logger.info("[rewrite] 改写prompt: %s\n", prompt)
-    logger.info("[rewrite] 开始改写，原文长度=%d，预览=%s", len(text), (text[:80] + "…") if len(text) > 80 else text)
-    try:
-        # 部分兼容 API（如豆包）astream 返回的 chunk.content 可能为空，先尝试流式
-        got_any = False
-        chunk_count = 0
-        full_rewritten: list[str] = []
-        async for chunk in _llm.astream([HumanMessage(content=prompt)]):
-            content = getattr(chunk, "content", None)
-            if isinstance(content, str) and content:
-                got_any = True
-                chunk_count += 1
-                full_rewritten.append(content)
-                yield f"data: {json.dumps({'type': 'chunk', 'content': content}, ensure_ascii=False)}\n\n"
-        if got_any:
-            rewritten_text = "".join(full_rewritten)
-            logger.info("[rewrite] 流式改写完成，共推送 %d 个 chunk，全文长度=%d", chunk_count, len(rewritten_text))
-            logger.info("[rewrite] 改写后全文内容：\n%s", rewritten_text)
-        else:
-            # 流式无有效 content 时，用 invoke 拿完整结果再一次性推送
-            logger.info("[rewrite] 流式无有效 content，回退为 invoke")
-            result = await asyncio.to_thread(
-                _llm.invoke,
-                [HumanMessage(content=prompt)],
-            )
-            full = getattr(result, "content", None) or ""
-            if full:
-                yield f"data: {json.dumps({'type': 'chunk', 'content': full}, ensure_ascii=False)}\n\n"
-                logger.info("[rewrite] invoke 回退完成，改写结果长度=%d", len(full))
-                logger.info("[rewrite] 改写后全文内容：\n%s", full)
-            else:
-                logger.warning("[rewrite] invoke 返回内容为空")
-
-        yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-        logger.info("[rewrite] 已发送 done")
-    except Exception as e:
-        logger.exception("[rewrite] 改写异常: %s", e)
-        yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
 
-@app_server.post("/rewrite-selection")
-async def rewrite_selection(request: RewriteRequest):
-    """根据用户选中的文档内容，流式返回大模型改写结果。"""
-    text = (request.text or "").strip()
-    hint = (request.hint or "").strip()
-    logger.info("[rewrite-selection] 收到请求，选中长度=%d，补充说明长度=%d", len(text), len(hint))
-    if not text:
-        logger.warning("[rewrite-selection] 选中内容为空，返回错误")
-        return StreamingResponse(
-            iter([f"data: {json.dumps({'type': 'error', 'message': '选中内容为空'}, ensure_ascii=False)}\n\n"]),
-            media_type="text/event-stream",
-        )
-    return StreamingResponse(
-        _rewrite_stream_generator(text, hint),
-        media_type="text/event-stream",
-    )
+
+
 
 @app_server.post("/run-task", response_model=TaskResponse)
 async def run_agent_task(request: TriggerRequest):
@@ -173,12 +91,91 @@ async def run_agent_task(request: TriggerRequest):
         "user_intent": "",
         "task_plan": [],
     }
+    async def _event_generator(inputs, thread_id: str = "default_thread"):
+        """
+        监听 LangGraph 执行过程，并通过 SSE 推送给前端。文档生成/每次改写完成后会中断，可循环调用 /doc-rewrite-and-continue 继续改写，直到用户输入「完成」。
+        """
+
+        config = {"configurable": {"thread_id": thread_id}}
+        try:
+            async for named_event, messages_event, msg_chunks in graph.astream(
+                inputs,
+                stream_mode=["messages", "updates"],
+                subgraphs=True,
+                config=config,
+            ):
+                logger.info("   ----> named_event, messages_event, msg_chunks: %s, %s, %s", named_event, messages_event, msg_chunks)
+                if messages_event == "updates":
+                    logger.info("msg_chunks %s", msg_chunks)
+                elif messages_event == "messages":
+                    msg_data = msg_chunks[0]
+                    node_name = msg_chunks[1].get("lc_agent_name", "Unknown node")
+                    if node_name == "doc_expert" and hasattr(msg_data, "content") and msg_data.content:
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': msg_data.content}, ensure_ascii=False)}\n\n"
+
+            # 流结束后检查是否处于中断（文档生成完成，等待改写）
+            state = graph.get_state(config)
+            if state.next:  # 有待执行节点，说明是 interrupt_after 暂停
+                doc = (state.values or {}).get("doc", "")
+                logger.info("[interrupt] 文档生成完成，等待用户改写指令，doc 长度=%d", len(doc))
+                yield f"data: {json.dumps({'type': 'interrupt', 'doc': doc}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error(f"Error during streaming: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
     
     # 返回流式响应，这样前端就能一点点收到数据了
     return StreamingResponse(
-        event_generator(inputs, user_id), 
+        _event_generator(inputs, user_id),
         media_type="text/event-stream"
     )
+
+
+@app_server.post("/rewrite-selection")
+async def rewrite_selection(request: RewriteRequest):
+    """
+    独立的改写流程：选中文本 + 可选 hint → 流式返回改写结果。
+    使用 LangGraph rewrite_graph 实现。
+    """
+    text = (request.text or "").strip()
+    hint = (request.hint or "").strip()
+    thread_id = (request.thread_id or "").strip()
+    if not text:
+        return StreamingResponse(
+            iter([f"data: {json.dumps({'type': 'error', 'message': '选中内容不能为空'}, ensure_ascii=False)}\n\n"]),
+            media_type="text/event-stream",
+        )
+
+    # 通过 thread 从主图读取 doc 上下文
+    doc = ""
+    if thread_id:
+        config = {"configurable": {"thread_id": thread_id}}
+        state = graph.get_state(config)
+        logger.info("[rewrite-selection] 从 thread=%s 读取 state: %s", thread_id, state)
+        doc = (state.values or {}).get("doc", "")
+
+    async def _rewrite_stream():
+        try:
+            inputs = {"text": text, "hint": hint, "doc": doc, "result": ""}
+            final_result = ""
+            async for event in rewrite_graph.astream(
+                inputs,
+                stream_mode=["messages", "values"],
+                config=config,
+            ):
+                mode, chunk = event[0], event[1]
+                if mode == "messages":
+                    msg, meta = chunk[0], chunk[1] if isinstance(chunk[1], dict) else {}
+                    content = getattr(msg, "content", None)
+                    if isinstance(content, str) and content:
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content}, ensure_ascii=False)}\n\n"
+                elif mode == "values":
+                    final_result = (chunk or {}).get("result", "")
+            yield f"data: {json.dumps({'type': 'done', 'result': final_result}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.exception("[rewrite-selection] 改写异常: %s", e)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(_rewrite_stream(), media_type="text/event-stream")
 
 if __name__ == "__main__":
     # 启动服务，监听 8000 端口

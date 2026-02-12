@@ -48,6 +48,9 @@ class MergeAgentState(TypedDict):
     #续写的文档部分
     doc_rewritten: str
 
+    # 中断后用户输入的改写指令（用于 interrupt → rewrite 流程）
+    rewrite_instruction: str
+
     none_route: str
 
     chat_node: str
